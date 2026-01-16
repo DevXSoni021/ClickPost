@@ -54,7 +54,7 @@ class OmniRetailSuperAgent:
 
         logger.info("✓ Super Agent initialized with 4 sub-agents")
 
-    def analyze_query(self, query: str, user_id: Optional[int] = None, session_context: Optional[Dict[str, Any]] = None) -> AgentState:
+    def analyze_query(self, query: str, user_id: Optional[int] = None, session_context: Optional[Dict[str, Any]] = None, entities: Optional[Dict[str, Any]] = None) -> AgentState:
         """
         Planner: Analyzes query to determine required agents and dependencies
         """
@@ -146,6 +146,12 @@ class OmniRetailSuperAgent:
         if session_context:
             current_context.update(session_context)
 
+        if entities:
+            if entities.get('order_id') and not extracted_order_id:
+                current_context['order_id'] = entities['order_id']
+            if entities.get('product_name'):
+                current_context['product_name'] = entities['product_name']
+        
         if extracted_order_id:
             current_context['order_id'] = extracted_order_id
 
@@ -162,6 +168,29 @@ class OmniRetailSuperAgent:
 
         logger.info(f"Query analysis: {sum(agents_needed.values())} agents needed - Stages: {execution_order}")
         return state
+
+    async def _extract_entities(self, query: str) -> Dict[str, Any]:
+        """Extract key entities from query using LLM"""
+        if not self.model:
+            return {}
+            
+        try:
+            entity_prompt = f"""Extract key entities from this query for an e-commerce database search.
+QUERY: {query}
+JSON OUTPUT ONLY:
+{{
+  "product_name": "string or null",
+  "order_id": "integer or null",
+  "ticket_id": "integer or null",
+  "issue_type": "string or null"
+}}"""
+            response = await asyncio.to_thread(self.model.generate_content, entity_prompt)
+            import json
+            text = response.text.strip().replace('```json', '').replace('```', '').strip()
+            return json.loads(text)
+        except Exception as e:
+            logger.warning(f"Entity extraction failed: {e}")
+            return {}
 
     async def _run_agent_sync(self, agent_name: str, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Wrapper to run synchronous agents in a thread"""
@@ -294,7 +323,8 @@ Final Answer:"""
             session_context = self.user_sessions[user_id]
             logger.info(f"Loaded session context for User {user_id}: {session_context}")
 
-        state = self.analyze_query(query, user_id, session_context)
+        entities = await self._extract_entities(query)
+        state = self.analyze_query(query, user_id, session_context, entities)
 
         state = await self.execute_agents(state)
 

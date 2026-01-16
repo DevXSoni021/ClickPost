@@ -71,14 +71,20 @@ def seed_shopcore():
             products
         )
 
-        orders = [(i, i, i, datetime.now(), 'SHIPPED', 1, 1000.0 * i, f"Note {i}") for i in range(1, 11)]
+        # Recalibrate: User 1 owns Orders 1, 2, 3 (including Gaming Monitor)
+        # i=1: Headphones, i=2: Watch, i=3: Gaming Monitor
+        orders = []
+        for i in range(1, 11):
+            uid = 1 if i <= 3 else i
+            orders.append((i, uid, i, datetime.now(), 'SHIPPED' if i != 3 else 'IN_TRANSIT', 1, 1000.0 * i, f"Note {i}"))
+            
         cursor.executemany(
             "INSERT INTO orders (order_id, user_id, product_id, order_date, status, quantity, total_amount, special_notes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             orders
         )
 
         conn.commit()
-        print("✓ ShopCore: Cleaned & Seeded (IDs 1-10)")
+        print("✓ ShopCore: Cleaned & Seeded (User 1 owns Orders 1-3)")
         return True
     except Exception as e:
         print(f"✗ ShopCore Fail: {e}")
@@ -104,11 +110,11 @@ def seed_shipstream():
             shipments.append((
                 i,
                 i,
-                f'TRK{i:04d}', # TRK0001, TRK0002...
+                f'TRK{i:04d}', 
                 1,
                 f'Addr {i}',
                 datetime.now(),
-                'IN_TRANSIT',
+                'IN_TRANSIT' if i != 3 else 'OUT_FOR_DELIVERY',
                 'FedEx'
             ))
         cursor.executemany(
@@ -123,7 +129,7 @@ def seed_shipstream():
         )
 
         conn.commit()
-        print("✓ ShipStream: Cleaned & Seeded (IDs 1-10)")
+        print("✓ ShipStream: Cleaned & Seeded (Order 3 is Out for Delivery)")
         return True
     except Exception as e:
         print(f"✗ ShipStream Fail: {e}")
@@ -146,7 +152,14 @@ def seed_payguard():
             wallets
         )
 
-        txns = [(i, i, i, f'TXN{i:04d}', 1000.0*i, 'DEBIT', 'COMPLETED', datetime.now(), f'Pay Order {i}') for i in range(1, 11)]
+        txns = []
+        for i in range(1, 11):
+            uid = 1 if i <= 3 else i
+            txns.append((i, uid, i, f'TXN{i:04d}', 1000.0*i, 'DEBIT', 'COMPLETED', datetime.now(), f'Pay Order {i}'))
+        
+        # Scenario: Double Charge for Order 3 (Gaming Monitor) for User 1
+        txns.append((11, 1, 3, 'TXN-DUP-003', 3000.0, 'DEBIT', 'COMPLETED', datetime.now(), 'Duplicate charge for Order 3'))
+        
         cursor.executemany(
             "INSERT INTO transactions (transaction_id, wallet_id, order_id, reference_id, amount, transaction_type, status, timestamp, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             txns

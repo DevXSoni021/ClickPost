@@ -95,9 +95,14 @@ class ShopCoreAgent(BaseAgent):
             order_id = context.get('order_id')
 
         product_keywords = self._extract_product_keywords(query)
+        
+        # Priority: LLM-extracted product name from Orchestrator context
+        if context and context.get('product_name'):
+            product_keywords = context['product_name']
+            logger.info(f"Using product name from context: {product_keywords}")
 
         if user_id:
-            if product_keywords and len(product_keywords) > 2 and not order_id:
+            if product_keywords and len(product_keywords) >= 2 and not order_id:
                 pass
 
             if order_id:
