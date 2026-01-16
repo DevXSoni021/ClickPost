@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 interface Agent {
   name: string;
@@ -54,12 +53,11 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    // Fetch real metrics from backend
     const fetchMetrics = async () => {
       try {
         const response = await fetch('http://localhost:8000/agents/status');
         const data = await response.json();
-        // Update metrics based on response
+        // Update metrics logic here if available from backend
       } catch (error) {
         console.error('Failed to fetch metrics:', error);
       }
@@ -71,131 +69,180 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">System Dashboard</h1>
-        <p className="text-gray-400">Omni-Retail Multi-Agent Orchestrator Status</p>
-      </div>
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 transition-colors duration-300 font-sans">
+      <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-[1440px] mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
+              <span className="text-white text-xl">🤖</span>
+            </div>
+            <h1 className="font-bold text-xl tracking-tight">Omni-Retail <span className="text-indigo-500 font-medium">Assistant</span></h1>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_0_0_rgba(34,197,94,0.7)] animate-[pulse_2s_infinite]"></span>
+              System Live
+            </div>
+            <button className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              <span className="text-xl">🔔</span>
+            </button>
+            <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+              <span className="text-slate-400">👤</span>
+            </div>
+          </div>
+        </div>
+      </nav>
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <Card className="bg-gradient-to-br from-blue-900 to-blue-800 border-blue-700 p-6">
-          <h3 className="text-blue-200 text-sm font-semibold mb-2">Total Agents</h3>
-          <p className="text-3xl font-bold text-white">{metrics.total_agents}</p>
-          <p className="text-blue-300 text-xs mt-2">All operational</p>
-        </Card>
+      <main className="max-w-[1440px] mx-auto p-6 space-y-8">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Agent Performance Dashboard</h2>
+            <p className="text-slate-500 dark:text-slate-400 mt-1">Real-time status of the Multi-Agent Orchestrator</p>
+          </div>
+          <div className="flex gap-3">
+            <button className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <span className="text-lg">📅</span>
+              Last 30 Days
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 hover:opacity-90 transition-all">
+              <span className="text-lg">📥</span>
+              Export PDF
+            </button>
+          </div>
+        </header>
 
-        <Card className="bg-gradient-to-br from-green-900 to-green-800 border-green-700 p-6">
-          <h3 className="text-green-200 text-sm font-semibold mb-2">Active Conversations</h3>
-          <p className="text-3xl font-bold text-white">{metrics.active_conversations}</p>
-          <p className="text-green-300 text-xs mt-2">In progress</p>
-        </Card>
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="relative overflow-hidden p-6 rounded-2xl bg-blue-600 text-white group cursor-pointer hover:shadow-2xl hover:shadow-blue-500/20 transition-all">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+              <span className="text-6xl">👥</span>
+            </div>
+            <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Total Agents</p>
+            <h3 className="text-4xl font-bold mt-2">{metrics.total_agents}</h3>
+            <p className="text-blue-100/80 text-xs mt-4 flex items-center gap-1">
+              <span className="text-sm">✓</span>
+              All systems operational
+            </p>
+          </div>
 
-        <Card className="bg-gradient-to-br from-purple-900 to-purple-800 border-purple-700 p-6">
-          <h3 className="text-purple-200 text-sm font-semibold mb-2">Avg Response Time</h3>
-          <p className="text-3xl font-bold text-white">{metrics.avg_response_time}s</p>
-          <p className="text-purple-300 text-xs mt-2">Multi-database queries</p>
-        </Card>
+          <div className="relative overflow-hidden p-6 rounded-2xl bg-emerald-600 text-white group cursor-pointer hover:shadow-2xl hover:shadow-emerald-500/20 transition-all">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+              <span className="text-6xl">💬</span>
+            </div>
+            <p className="text-emerald-100 text-sm font-medium uppercase tracking-wider">Active Conversations</p>
+            <h3 className="text-4xl font-bold mt-2">{metrics.active_conversations}</h3>
+            <p className="text-emerald-100/80 text-xs mt-4 flex items-center gap-1">
+              <span className="text-sm">📈</span>
+              In-progress queries
+            </p>
+          </div>
 
-        <Card className="bg-gradient-to-br from-orange-900 to-orange-800 border-orange-700 p-6">
-          <h3 className="text-orange-200 text-sm font-semibold mb-2">System Uptime</h3>
-          <p className="text-3xl font-bold text-white">{metrics.uptime}</p>
-          <p className="text-orange-300 text-xs mt-2">30 days</p>
-        </Card>
-      </div>
+          <div className="relative overflow-hidden p-6 rounded-2xl bg-purple-600 text-white group cursor-pointer hover:shadow-2xl hover:shadow-purple-500/20 transition-all">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+              <span className="text-6xl">⚡️</span>
+            </div>
+            <p className="text-purple-100 text-sm font-medium uppercase tracking-wider">Avg Response Time</p>
+            <h3 className="text-4xl font-bold mt-2">{metrics.avg_response_time}s</h3>
+            <p className="text-purple-100/80 text-xs mt-4 flex items-center gap-1">
+              <span className="text-sm">🔍</span>
+              Multi-database optimized
+            </p>
+          </div>
 
-      {/* Agent Status Grid */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-4">Sub-Agent Status</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {agents.map((agent, idx) => (
-            <Card
-              key={idx}
-              className="bg-gray-800 border-gray-700 p-6 hover:bg-gray-750 transition"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="text-4xl">{agent.icon}</span>
+          <div className="relative overflow-hidden p-6 rounded-2xl bg-orange-600 text-white group cursor-pointer hover:shadow-2xl hover:shadow-orange-500/20 transition-all">
+            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+              <span className="text-6xl">☁️</span>
+            </div>
+            <p className="text-orange-100 text-sm font-medium uppercase tracking-wider">System Uptime</p>
+            <h3 className="text-4xl font-bold mt-2">{metrics.uptime}</h3>
+            <p className="text-orange-100/80 text-xs mt-4 flex items-center gap-1">
+              <span className="text-sm">📅</span>
+              Past 30 days
+            </p>
+          </div>
+        </section>
+
+        <section className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              Sub-Agent Status
+              <span className="text-xs font-normal px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500">4 Active</span>
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {agents.map((agent, idx) => (
+              <div key={idx} className="bg-white/5 backdrop-blur-md border border-slate-200 dark:border-white/10 p-6 rounded-2xl hover:bg-white/10 dark:hover:bg-white/10 transition-all">
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-2xl">
+                      {agent.icon}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-lg">{agent.name}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{agent.queries_processed} queries processed</p>
+                    </div>
+                  </div>
+                  <span className={`flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full uppercase tracking-tighter ${agent.status === 'ready' ? 'bg-green-500/10 text-green-500' :
+                      agent.status === 'busy' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${agent.status === 'ready' ? 'bg-green-500' :
+                        agent.status === 'busy' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}></span>
+                    {agent.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-4 border-t border-slate-200 dark:border-slate-800 pt-4">
                   <div>
-                    <h3 className="text-white font-semibold">{agent.name}</h3>
-                    <p className="text-gray-400 text-sm">
-                      {agent.queries_processed} queries processed
-                    </p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Queries/hr</p>
+                    <p className="font-semibold">{Math.floor(agent.queries_processed / 24)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Avg Response</p>
+                    <p className="font-semibold">{idx === 0 ? '1.2s' : idx === 1 ? '0.9s' : idx === 2 ? '0.5s' : '1.1s'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Error Rate</p>
+                    <p className="font-semibold text-green-500">0.{idx}%</p>
                   </div>
                 </div>
-                <Badge
-                  className={`${
-                    agent.status === 'ready'
-                      ? 'bg-green-700 text-green-100'
-                      : agent.status === 'busy'
-                      ? 'bg-yellow-700 text-yellow-100'
-                      : 'bg-red-700 text-red-100'
-                  }`}
-                >
-                  {agent.status === 'ready' ? '🟢' : '🟡'} {agent.status}
-                </Badge>
               </div>
+            ))}
+          </div>
+        </section>
 
-              {/* Mini stats */}
-              <div className="mt-4 grid grid-cols-3 gap-2 pt-4 border-t border-gray-700">
-                <div>
-                  <p className="text-gray-500 text-xs">Queries/Hour</p>
-                  <p className="text-white font-semibold">{Math.floor(agent.queries_processed / 24)}</p>
+        <section className="space-y-6">
+          <h3 className="text-xl font-bold">Database Connections</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {['Neon PostgreSQL', 'Vector Search DB', 'Warehouse API', 'Upstash Redis'].map((name, idx) => (
+              <div key={idx} className="bg-white/5 backdrop-blur-md border border-slate-200 dark:border-white/10 p-5 rounded-2xl flex flex-col items-center text-center gap-3">
+                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mb-1">
+                  <span className="text-indigo-500 text-2xl">
+                    {idx === 0 ? '🗄️' : idx === 1 ? '🔍' : idx === 2 ? '🏭' : '⚡️'}
+                  </span>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Avg Response</p>
-                  <p className="text-white font-semibold">234ms</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-xs">Error Rate</p>
-                  <p className="text-white font-semibold">0.2%</p>
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_0_0_rgba(34,197,94,0.7)] animate-[pulse_2s_infinite]"></span>
+                    <span className="text-green-500 text-xs font-bold">CONNECTED</span>
+                  </div>
+                  <p className="text-sm font-medium">{name}</p>
                 </div>
               </div>
-            </Card>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
+        </section>
+      </main>
 
-      {/* Database Status */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white mb-4">Database Connections</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {['DB_ShopCore', 'DB_ShipStream', 'DB_PayGuard', 'DB_CareDesk'].map((db, idx) => (
-            <Card key={idx} className="bg-gray-800 border-gray-700 p-4">
-              <h4 className="text-white font-semibold mb-2">{db}</h4>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-green-400 text-sm">Connected</span>
-              </div>
-              <p className="text-gray-400 text-xs mt-2">Neon PostgreSQL</p>
-            </Card>
-          ))}
-        </div>
-      </div>
+      <footer className="mt-12 py-8 border-t border-slate-200 dark:border-slate-800 text-center">
+        <p className="text-sm text-slate-500 dark:text-slate-400">Powered by LangGraph • Google ADK • Neon PostgreSQL • Next.js</p>
+      </footer>
 
-      {/* System Info */}
-      <Card className="bg-gray-800 border-gray-700 p-6">
-        <h3 className="text-white font-bold mb-4">System Information</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <p className="text-gray-400">Framework</p>
-            <p className="text-white font-semibold">LangGraph + Google ADK</p>
-          </div>
-          <div>
-            <p className="text-gray-400">Database</p>
-            <p className="text-white font-semibold">Neon PostgreSQL</p>
-          </div>
-          <div>
-            <p className="text-gray-400">Frontend</p>
-            <p className="text-white font-semibold">Next.js 15 + React</p>
-          </div>
-          <div>
-            <p className="text-gray-400">LLM</p>
-            <p className="text-white font-semibold">Gemini 2.0 Flash</p>
-          </div>
-        </div>
-      </Card>
+      <style jsx global>{`
+        @keyframes pulse {
+          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+          70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+      `}</style>
     </div>
   );
 }

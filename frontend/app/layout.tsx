@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Plus_Jakarta_Sans } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
+const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-jakarta' })
 
 export const metadata: Metadata = {
   title: 'Omni-Retail Assistant',
@@ -16,7 +17,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <head>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+      </head>
+      <body className={`${inter.variable} ${jakarta.variable} font-sans`}>{children}</body>
     </html>
   )
 }

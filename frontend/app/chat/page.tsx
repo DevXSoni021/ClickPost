@@ -1,9 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 
 interface Message {
   id: string;
@@ -11,14 +8,6 @@ interface Message {
   content: string;
   timestamp: string;
   agents?: string[];
-}
-
-interface QueryResponse {
-  timestamp: string;
-  query: string;
-  agents_invoked: string[];
-  narrative_response: string;
-  data_sources: Record<string, any>;
 }
 
 export default function ChatPage() {
@@ -32,22 +21,21 @@ export default function ChatPage() {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
-  // Initialize WebSocket connection with reconnection logic
   const connectWebSocket = () => {
     try {
       const websocket = new WebSocket('ws://localhost:8000/ws/chat');
-      
+
       websocket.onopen = () => {
         console.log('✓ WebSocket connected');
         setWsConnected(true);
         wsRef.current = websocket;
         reconnectAttempts.current = 0;
       };
-      
+
       websocket.onmessage = (event) => {
         try {
           const response = JSON.parse(event.data);
-          
+
           if (response.type === 'response') {
             const assistantMessage: Message = {
               id: `msg-${Date.now()}`,
@@ -56,7 +44,7 @@ export default function ChatPage() {
               timestamp: response.timestamp || new Date().toISOString(),
               agents: response.agents_used || response.agents_invoked
             };
-            
+
             setMessages(prev => [...prev, assistantMessage]);
             setLoading(false);
           } else if (response.type === 'error') {
@@ -74,28 +62,25 @@ export default function ChatPage() {
           setLoading(false);
         }
       };
-      
+
       websocket.onerror = (error) => {
         console.error('WebSocket error:', error);
         setWsConnected(false);
       };
-      
+
       websocket.onclose = () => {
         console.log('WebSocket closed');
         setWsConnected(false);
         wsRef.current = null;
-        
-        // Attempt to reconnect
+
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current += 1;
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
           console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current})...`);
-          
+
           reconnectTimeoutRef.current = setTimeout(() => {
             connectWebSocket();
           }, delay);
-        } else {
-          console.error('Max reconnection attempts reached. Falling back to REST API.');
         }
       };
     } catch (error) {
@@ -106,7 +91,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     connectWebSocket();
-    
+
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -117,7 +102,6 @@ export default function ChatPage() {
     };
   }, []);
 
-  // Auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -129,7 +113,6 @@ export default function ChatPage() {
     setInput('');
     setLoading(true);
 
-    // Add user message immediately
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       type: 'user',
@@ -139,7 +122,6 @@ export default function ChatPage() {
 
     setMessages(prev => [...prev, userMessage]);
 
-    // Try WebSocket first, fallback to REST API
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify({
@@ -148,11 +130,9 @@ export default function ChatPage() {
         }));
       } catch (error) {
         console.error('WebSocket send error:', error);
-        // Fallback to REST API
         await sendViaRestAPI(query);
       }
     } else {
-      // Use REST API if WebSocket is not available
       await sendViaRestAPI(query);
     }
   };
@@ -175,7 +155,7 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
-      
+
       const assistantMessage: Message = {
         id: `msg-${Date.now()}`,
         type: 'assistant',
@@ -183,7 +163,7 @@ export default function ChatPage() {
         timestamp: data.timestamp || new Date().toISOString(),
         agents: data.agents_invoked || []
       };
-      
+
       setMessages(prev => [...prev, assistantMessage]);
       setLoading(false);
     } catch (error) {
@@ -206,112 +186,157 @@ export default function ChatPage() {
     }
   };
 
+  const suggestedPrompts = [
+    { icon: '📦', text: '"Where is my Gaming Monitor?"', desc: 'Track current shipment status' },
+    { icon: '💳', text: '"What\'s the status of my refund?"', desc: 'Check payment and return status' },
+    { icon: '🎫', text: '"Can you check my support ticket?"', desc: 'View updates on active cases' }
+  ];
+
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-teal-600 to-teal-700 text-white p-6 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">🤖 Omni-Retail Assistant</h1>
-            <p className="text-teal-100 mt-2">Multi-Agent Customer Support System</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${wsConnected ? 'bg-green-400' : 'bg-red-400'} animate-pulse`}></div>
-            <span className="text-sm">{wsConnected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-        </div>
+    <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden opacity-0 dark:opacity-100">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-teal-600/20 rounded-full blur-[100px] animate-pulse"></div>
+        <div className="absolute top-1/2 -right-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-0 left-1/3 w-[500px] h-[500px] bg-teal-600/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
 
-      {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <header className="relative flex items-center justify-between px-8 h-20 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-md z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-600 to-emerald-500 flex items-center justify-center shadow-lg shadow-teal-600/20">
+            <span className="text-white text-2xl">🤖</span>
+          </div>
+          <div>
+            <h1 className="font-bold text-xl tracking-tight leading-none">Omni-Retail Assistant</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium tracking-wide uppercase">Multi-Agent Support System</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <span className="relative flex h-2 w-2">
+              {wsConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${wsConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+            </span>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{wsConnected ? 'Connected' : 'Disconnected'}</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="relative flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto z-10">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-400">
-              <h2 className="text-2xl font-bold mb-4">Welcome to Omni-Retail Support</h2>
-              <p className="mb-6">Ask me about your orders, shipments, refunds, or support tickets!</p>
-              <div className="space-y-3 text-left max-w-md mx-auto">
-                <div className="bg-slate-700 p-4 rounded-lg">
-                  <p className="font-semibold text-teal-400">📦 &quot;Where is my Gaming Monitor?&quot;</p>
-                </div>
-                <div className="bg-slate-700 p-4 rounded-lg">
-                  <p className="font-semibold text-teal-400">💳 &quot;What&apos;s the status of my refund?&quot;</p>
-                </div>
-                <div className="bg-slate-700 p-4 rounded-lg">
-                  <p className="font-semibold text-teal-400">🎫 &quot;Can you check my support ticket?&quot;</p>
-                </div>
-              </div>
+          <div className="max-w-2xl w-full text-center space-y-12">
+            <div className="space-y-4">
+              <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Welcome to <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-500">Omni-Retail Support</span>
+              </h2>
+              <p className="text-lg text-slate-500 dark:text-slate-400 max-w-lg mx-auto leading-relaxed">
+                Ask me anything about your orders, shipments, refunds, or support tickets.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 w-full">
+              {suggestedPrompts.map((prompt, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(prompt.text.replace(/"/g, ''))}
+                  className="group flex items-center gap-4 p-5 rounded-2xl transition-all duration-300 text-left border border-slate-200 dark:border-white/5 hover:border-teal-600/40 bg-white/70 dark:bg-white/5 backdrop-blur-md hover:transform hover:-translate-y-1"
+                >
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-teal-600/10 flex items-center justify-center group-hover:scale-110 transition-transform text-2xl">
+                    {prompt.icon}
+                  </div>
+                  <div className="flex-grow">
+                    <span className="text-slate-900 dark:text-white font-medium block">{prompt.text}</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">{prompt.desc}</span>
+                  </div>
+                  <span className="text-slate-300 dark:text-white/20 group-hover:text-teal-600 transition-colors text-2xl">→</span>
+                </button>
+              ))}
             </div>
           </div>
         ) : (
-          messages.map(msg => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+          <div className="w-full max-w-4xl space-y-4">
+            {messages.map(msg => (
               <div
-                className={`max-w-xl px-4 py-3 rounded-lg ${
-                  msg.type === 'user'
-                    ? 'bg-teal-600 text-white rounded-br-none'
-                    : 'bg-slate-700 text-gray-100 rounded-bl-none'
-                }`}
+                key={msg.id}
+                className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                
-                {msg.agents && msg.agents.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-slate-600 flex flex-wrap gap-1">
-                    {msg.agents.map(agent => (
-                      <span
-                        key={agent}
-                        className="text-xs bg-slate-600 px-2 py-1 rounded text-teal-300"
-                      >
-                        {agent}
-                      </span>
-                    ))}
+                <div
+                  className={`max-w-xl px-5 py-4 rounded-2xl backdrop-blur-md ${msg.type === 'user'
+                      ? 'bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-br-none shadow-lg shadow-teal-600/20'
+                      : 'bg-white/70 dark:bg-white/5 text-slate-900 dark:text-gray-100 rounded-bl-none border border-slate-200 dark:border-white/10'
+                    }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+
+                  {msg.agents && msg.agents.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-white/20 flex flex-wrap gap-2">
+                      {msg.agents.map(agent => (
+                        <span
+                          key={agent}
+                          className="text-xs bg-white/20 dark:bg-white/10 px-3 py-1 rounded-full font-medium"
+                        >
+                          {agent}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-xs opacity-60 mt-2">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-white/70 dark:bg-white/5 backdrop-blur-md px-5 py-4 rounded-2xl border border-slate-200 dark:border-white/10">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-teal-600 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-teal-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
-                )}
-                
-                <p className="text-xs opacity-70 mt-1">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </p>
+                </div>
               </div>
-            </div>
-          ))
-        )}
-        
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-slate-700 px-4 py-3 rounded-lg">
-              <div className="flex space-x-2">
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-100"></div>
-                <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce delay-200"></div>
-              </div>
-            </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
         )}
-        
-        <div ref={messagesEndRef} />
-      </div>
+      </main>
 
-      {/* Input Area */}
-      <div className="bg-slate-800 border-t border-slate-700 p-4 shadow-xl">
-        <div className="flex gap-3">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Ask about your order, shipment, refund, or support ticket..."
-            className="flex-1 bg-slate-700 text-white border-slate-600 placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
-            disabled={loading}
-          />
-          <Button
-            onClick={handleSendMessage}
-            disabled={loading || !input.trim()}
-            className="bg-teal-600 hover:bg-teal-700 text-white px-6"
-          >
-            {loading ? '⏳' : '📤'} Send
-          </Button>
+      <footer className="relative p-6 md:p-10 w-full flex justify-center z-10">
+        <div className="max-w-4xl w-full">
+          <div className="bg-white/70 dark:bg-white/5 backdrop-blur-md rounded-2xl p-2 flex items-center gap-3 shadow-2xl shadow-slate-200 dark:shadow-black/50 border border-slate-200 dark:border-white/10 focus-within:ring-2 focus-within:ring-teal-600/40 transition-all">
+            <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-white/40 ml-1 text-2xl">
+              💬
+            </div>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-white/30 text-base py-3 px-2"
+              placeholder="Ask about your order, shipment, refund, or support ticket..."
+              disabled={loading}
+              type="text"
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={loading || !input.trim()}
+              className="bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-600/90 hover:to-emerald-500/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-teal-600/20"
+            >
+              <span className="hidden sm:inline">Send Message</span>
+              <span className="text-xl">{loading ? '⏳' : '📤'}</span>
+            </button>
+          </div>
+          <p className="text-center text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 dark:text-white/20 mt-4">
+            AI agent might provide automated information. please verify critical details.
+          </p>
         </div>
+      </footer>
+
+      <div className="fixed bottom-6 right-6 z-50">
+        <button className="w-12 h-12 rounded-full bg-white/70 dark:bg-white/5 backdrop-blur-md flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-600 transition-colors shadow-lg border border-slate-200 dark:border-white/10 text-2xl">
+          ⚙️
+        </button>
       </div>
     </div>
   );
