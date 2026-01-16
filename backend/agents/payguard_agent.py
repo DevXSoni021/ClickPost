@@ -54,6 +54,12 @@ class PayGuardAgent(BaseAgent):
         try:
             query_lower = natural_language_query.lower()
             
+            # 1. Try to extract order_id from text (Explicit Override Logic)
+            text_id = self._extract_order_id_from_text(natural_language_query)
+            if text_id and context:
+                logger.info(f"Extracted Order {text_id} from text for PayGuard (Overriding context)")
+                context['order_id'] = text_id
+
             # Check for refund queries
             if 'refund' in query_lower:
                 return self._handle_refund_query(context)
@@ -129,24 +135,36 @@ class PayGuardAgent(BaseAgent):
         """Handle wallet balance queries"""
         
         user_id = context.get('user_id') if context else None
+        order_id = context.get('order_id') if context else None
         
-        if not user_id:
+        if order_id:
+            # Transitive Lookup: Find wallet via Order ID (linked by Transaction)
+            sql = """
+            SELECT w.wallet_id, w.user_id, w.balance, w.currency, w.wallet_status, 
+                   w.created_at, w.last_updated
+            FROM wallets w
+            JOIN transactions t ON w.wallet_id = t.wallet_id
+            WHERE t.order_id = %s
+            LIMIT 1
+            """
+            return self.format_response(self.execute_query(sql, (order_id,)))
+            
+        elif user_id:
+            sql = """
+            SELECT wallet_id, user_id, balance, currency, wallet_status, 
+                   created_at, last_updated
+            FROM wallets
+            WHERE user_id = %s
+            """
+            return self.format_response(self.execute_query(sql, (user_id,)))
+            
+        else:
             return {
                 "agent": self.agent_name,
                 "success": False,
-                "error": "user_id required for wallet query",
+                "error": "user_id or order_id required for wallet query",
                 "data": []
             }
-        
-        sql = """
-        SELECT wallet_id, user_id, balance, currency, wallet_status, 
-               created_at, last_updated
-        FROM wallets
-        WHERE user_id = %s
-        """
-        
-        results = self.execute_query(sql, (user_id,))
-        return self.format_response(results)
     
     def _handle_transaction_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Handle transaction history queries"""

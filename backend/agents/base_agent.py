@@ -41,6 +41,15 @@ class BaseAgent(ABC):
             logger.warning(f"{agent_name}: No GEMINI_API_KEY found, text-to-SQL will not work")
             self.model = None
     
+    def _extract_order_id_from_text(self, query: str) -> Optional[int]:
+        """Extract explicit order ID from text using pattern matching"""
+        import re
+        # matches patterns like: "order 1", "order id 5", "order #10", etc.
+        match = re.search(r'order\s*(?:id|number|#)?\s*(\d+)', query.lower())
+        if match:
+            return int(match.group(1))
+        return None
+    
     def generate_sql(self, natural_language_query: str, context: Optional[Dict[str, Any]] = None) -> str:
         """
         Generate SQL query from natural language using Gemini
@@ -67,11 +76,16 @@ CONTEXT: {context if context else 'None'}
 
 REQUIREMENTS:
 1. Generate ONLY the SQL query, no explanations
-2. Use parameterized queries with %s placeholders for user inputs
-3. Include appropriate JOINs if multiple tables are needed
-4. Add ORDER BY and LIMIT clauses where appropriate
-5. Ensure the query is safe from SQL injection
+2. Use single quotes for string literals derived from the user query (e.g. name LIKE '%Monitor%')
+3. Use %s placeholders ONLY for structural IDs (user_id, order_id) that are likely provided in CONTEXT
+4. Include appropriate JOINs if multiple tables are needed
+5. Add ORDER BY and LIMIT clauses where appropriate
 6. Return empty result if no data matches
+
+EXAMPLE:
+User Query: "Show me orders for Gaming Monitor"
+Context: {{'user_id': 1}}
+Correct SQL: SELECT * FROM orders o JOIN products p ON o.product_id = p.product_id WHERE o.user_id = %s AND p.name LIKE '%Gaming Monitor%'
 
 SQL Query:"""
         
@@ -81,6 +95,10 @@ SQL Query:"""
             
             # Clean up the SQL query
             sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
+            
+            # Escape % characters for psycopg2 execution (except %s placeholders)
+            # This is critical because Gemini often generates LIKE '%...' which psycopg2 tries to interpolate
+            sql_query = sql_query.replace('%', '%%').replace('%%s', '%s')
             
             logger.info(f"{self.agent_name} generated SQL: {sql_query}")
             return sql_query
@@ -166,20 +184,47 @@ SQL Query:"""
         Returns:
             Tuple of parameter values
         """
+        # Helper: Smart parameter extraction based on common patterns
+        # If we have specific keys in context, prioritize them in a logical order
+        # This is a heuristic since we don't strictly know the SQL structure here
+        
         # Count number of %s in query
         param_count = query.count('%s')
         
-        if param_count == 0:
-            return ()
-        
-        # Extract relevant parameters from context
         params = []
-        for key, value in context.items():
-            if value is not None:
-                params.append(value)
-                if len(params) >= param_count:
-                    break
         
+        # Priority keys often used in WHERE clauses
+        priority_keys = ['order_id', 'user_id', 'product_id', 'shipment_id', 'wallet_id', 'ticket_id']
+        
+        # 1. Try to match params based on what's in context vs what might be needed
+        # If we have exact keys in context, use them
+        used_keys = set()
+        
+        # Heuristic: If prompt asked for user_id and order_id structural usage, they likely appear in that order 
+        # or one of them appears.
+        
+        # Let's iterate priority keys and see if they are in context
+        for key in priority_keys:
+            if key in context and context[key] is not None:
+                if len(params) < param_count:
+                    params.append(context[key])
+                    used_keys.add(key)
+        
+        # 2. If we still need params, fill with other available context values (like strings, product names)
+        # filtered by what we haven't used
+        if len(params) < param_count:
+            for key, value in context.items():
+                if key not in used_keys and value is not None:
+                    params.append(value)
+                    if len(params) >= param_count:
+                        break
+        
+        # 3. Fallback: If we still don't have enough, Pad with None or empty string to match count
+        # This prevents "tuple index out of range" or argument mismatch in psycopg2
+        while len(params) < param_count:
+             # Default fallback - often better to fail with "0 matches" than "IndexError"
+             params.append(None)
+             
         return tuple(params)
     
     def handle_error(self, error: Exception) -> Dict[str, Any]:

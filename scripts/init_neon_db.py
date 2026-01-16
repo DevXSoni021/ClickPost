@@ -13,8 +13,13 @@ load_dotenv()
 
 # Database schemas
 SHOPCORE_SCHEMA = """
+-- Drop existing tables
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
 -- Users Table
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
@@ -26,7 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Products Table
-CREATE TABLE IF NOT EXISTS products (
+CREATE TABLE products (
     product_id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     category VARCHAR(100),
@@ -38,7 +43,7 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 -- Orders Table
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE orders (
     order_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id) ON DELETE CASCADE,
     product_id INT REFERENCES products(product_id),
@@ -49,14 +54,19 @@ CREATE TABLE IF NOT EXISTS orders (
     special_notes TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-CREATE INDEX IF NOT EXISTS idx_orders_date ON orders(order_date);
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_date ON orders(order_date);
 """
 
 SHIPSTREAM_SCHEMA = """
+-- Drop existing tables
+DROP TABLE IF EXISTS tracking_events CASCADE;
+DROP TABLE IF EXISTS shipments CASCADE;
+DROP TABLE IF EXISTS warehouses CASCADE;
+
 -- Warehouses Table
-CREATE TABLE IF NOT EXISTS warehouses (
+CREATE TABLE warehouses (
     warehouse_id SERIAL PRIMARY KEY,
     location VARCHAR(255) NOT NULL,
     city VARCHAR(100),
@@ -68,7 +78,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
 );
 
 -- Shipments Table
-CREATE TABLE IF NOT EXISTS shipments (
+CREATE TABLE shipments (
     shipment_id SERIAL PRIMARY KEY,
     order_id INT NOT NULL,
     tracking_number VARCHAR(100) UNIQUE NOT NULL,
@@ -82,9 +92,10 @@ CREATE TABLE IF NOT EXISTS shipments (
 );
 
 -- Tracking Events Table
-CREATE TABLE IF NOT EXISTS tracking_events (
+CREATE TABLE tracking_events (
     event_id SERIAL PRIMARY KEY,
     shipment_id INT REFERENCES shipments(shipment_id) ON DELETE CASCADE,
+    order_id INT,  -- Added for strict OrderID propagation
     warehouse_id INT REFERENCES warehouses(warehouse_id),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status_update VARCHAR(255),
@@ -93,15 +104,21 @@ CREATE TABLE IF NOT EXISTS tracking_events (
     notes TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_shipments_order_id ON shipments(order_id);
-CREATE INDEX IF NOT EXISTS idx_shipments_tracking ON shipments(tracking_number);
-CREATE INDEX IF NOT EXISTS idx_tracking_shipment_id ON tracking_events(shipment_id);
-CREATE INDEX IF NOT EXISTS idx_tracking_timestamp ON tracking_events(timestamp);
+CREATE INDEX idx_shipments_order_id ON shipments(order_id);
+CREATE INDEX idx_shipments_tracking ON shipments(tracking_number);
+CREATE INDEX idx_tracking_shipment_id ON tracking_events(shipment_id);
+CREATE INDEX idx_tracking_order_id ON tracking_events(order_id);
+CREATE INDEX idx_tracking_timestamp ON tracking_events(timestamp);
 """
 
 PAYGUARD_SCHEMA = """
+-- Drop existing tables
+DROP TABLE IF EXISTS payment_methods CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS wallets CASCADE;
+
 -- Wallets Table
-CREATE TABLE IF NOT EXISTS wallets (
+CREATE TABLE wallets (
     wallet_id SERIAL PRIMARY KEY,
     user_id INT NOT NULL,
     balance DECIMAL(12, 2) DEFAULT 0.00,
@@ -112,7 +129,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 
 -- Transactions Table
-CREATE TABLE IF NOT EXISTS transactions (
+CREATE TABLE transactions (
     transaction_id SERIAL PRIMARY KEY,
     wallet_id INT REFERENCES wallets(wallet_id),
     order_id INT,
@@ -126,7 +143,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 -- Payment Methods Table
-CREATE TABLE IF NOT EXISTS payment_methods (
+CREATE TABLE payment_methods (
     method_id SERIAL PRIMARY KEY,
     wallet_id INT REFERENCES wallets(wallet_id) ON DELETE CASCADE,
     provider VARCHAR(100),
@@ -137,17 +154,23 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     last_used TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_wallet_id ON transactions(wallet_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_order_id ON transactions(order_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions(timestamp);
+CREATE INDEX idx_wallets_user_id ON wallets(user_id);
+CREATE INDEX idx_transactions_wallet_id ON transactions(wallet_id);
+CREATE INDEX idx_transactions_order_id ON transactions(order_id);
+CREATE INDEX idx_transactions_timestamp ON transactions(timestamp);
 """
 
 CAREDESK_SCHEMA = """
+-- Drop existing tables
+DROP TABLE IF EXISTS satisfaction_surveys CASCADE;
+DROP TABLE IF EXISTS ticket_messages CASCADE;
+DROP TABLE IF EXISTS tickets CASCADE;
+
 -- Tickets Table
-CREATE TABLE IF NOT EXISTS tickets (
+CREATE TABLE tickets (
     ticket_id SERIAL PRIMARY KEY,
     user_id INT NOT NULL,
+    order_id INT,  -- Explicit OrderID column
     reference_id INT,
     reference_type VARCHAR(50),
     issue_type VARCHAR(100),
@@ -162,7 +185,7 @@ CREATE TABLE IF NOT EXISTS tickets (
 );
 
 -- Ticket Messages Table
-CREATE TABLE IF NOT EXISTS ticket_messages (
+CREATE TABLE ticket_messages (
     message_id SERIAL PRIMARY KEY,
     ticket_id INT REFERENCES tickets(ticket_id) ON DELETE CASCADE,
     sender_type VARCHAR(20),
@@ -174,7 +197,7 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
 );
 
 -- Satisfaction Surveys Table
-CREATE TABLE IF NOT EXISTS satisfaction_surveys (
+CREATE TABLE satisfaction_surveys (
     survey_id SERIAL PRIMARY KEY,
     ticket_id INT REFERENCES tickets(ticket_id),
     rating INT CHECK (rating >= 1 AND rating <= 5),
@@ -183,10 +206,11 @@ CREATE TABLE IF NOT EXISTS satisfaction_surveys (
     sentiment_analysis JSONB
 );
 
-CREATE INDEX IF NOT EXISTS idx_tickets_user_id ON tickets(user_id);
-CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
-CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_ticket_id ON ticket_messages(ticket_id);
+CREATE INDEX idx_tickets_user_id ON tickets(user_id);
+CREATE INDEX idx_tickets_order_id ON tickets(order_id);
+CREATE INDEX idx_tickets_status ON tickets(status);
+CREATE INDEX idx_tickets_created_at ON tickets(created_at);
+CREATE INDEX idx_messages_ticket_id ON ticket_messages(ticket_id);
 """
 
 def init_database(connection_string: str, schema: str, db_name: str):

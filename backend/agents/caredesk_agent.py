@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 CAREDESK_SCHEMA = """
 Tables:
-1. tickets (ticket_id, user_id, reference_id, reference_type, issue_type, title, description, 
+1. tickets (ticket_id, user_id, order_id, reference_id, reference_type, issue_type, title, description, 
             priority, status, assigned_agent_id, created_at, resolved_at, resolution_notes)
 2. ticket_messages (message_id, ticket_id, sender_type, sender_id, content, attachments, 
                      created_at, is_public)
@@ -19,6 +19,7 @@ Tables:
 Relationships:
 - ticket_messages.ticket_id -> tickets.ticket_id
 - satisfaction_surveys.ticket_id -> tickets.ticket_id
+- tickets.order_id -> orders.order_id (Hard Link)
 
 Reference Types: ORDER, TRANSACTION, GENERAL
 Issue Types: DELIVERY_ISSUE, PAYMENT_ISSUE, PRODUCT_QUALITY, REFUND_REQUEST, COMPLAINT
@@ -55,6 +56,12 @@ class CareDeskAgent(BaseAgent):
         try:
             query_lower = natural_language_query.lower()
             
+            # 1. Try to extract order_id from text (Explicit Override Logic)
+            text_id = self._extract_order_id_from_text(natural_language_query)
+            if text_id and context:
+                logger.info(f"Extracted Order {text_id} from text for CareDesk (Overriding context)")
+                context['order_id'] = text_id
+
             # Check for ticket status queries
             if 'ticket' in query_lower or 'support' in query_lower:
                 return self._handle_ticket_query(context)
@@ -77,13 +84,13 @@ class CareDeskAgent(BaseAgent):
         order_id = context.get('order_id') if context else None
         
         if order_id:
-            # Find tickets related to specific order
+            # Efficiency Fix: Prioritize Hard Link (order_id column) over Reference logic
+            logger.info(f"Looking up tickets via explicit Order ID: {order_id}")
             sql = """
-            SELECT t.ticket_id, t.reference_id, t.reference_type, t.issue_type, 
-                   t.title, t.description, t.priority, t.status, 
-                   t.assigned_agent_id, t.created_at, t.resolved_at
+            SELECT t.ticket_id, t.order_id, t.issue_type, t.title, t.description, 
+                   t.priority, t.status, t.assigned_agent_id, t.created_at, t.resolved_at
             FROM tickets t
-            WHERE t.reference_id = %s AND t.reference_type = 'ORDER'
+            WHERE t.order_id = %s
             ORDER BY t.created_at DESC
             """
             params = (order_id,)
@@ -91,9 +98,8 @@ class CareDeskAgent(BaseAgent):
         elif user_id:
             # Find all tickets for user
             sql = """
-            SELECT t.ticket_id, t.reference_id, t.reference_type, t.issue_type, 
-                   t.title, t.description, t.priority, t.status, 
-                   t.assigned_agent_id, t.created_at, t.resolved_at
+            SELECT t.ticket_id, t.order_id, t.issue_type, t.title, t.description, 
+                   t.priority, t.status, t.assigned_agent_id, t.created_at, t.resolved_at
             FROM tickets t
             WHERE t.user_id = %s
             ORDER BY t.created_at DESC
@@ -173,9 +179,9 @@ class CareDeskAgent(BaseAgent):
         """Get ticket details by ID"""
         
         sql = """
-        SELECT t.ticket_id, t.user_id, t.reference_id, t.reference_type, 
-               t.issue_type, t.title, t.description, t.priority, t.status, 
-               t.assigned_agent_id, t.created_at, t.resolved_at, t.resolution_notes
+        SELECT t.ticket_id, t.user_id, t.order_id, t.issue_type, t.title, 
+               t.description, t.priority, t.status, t.assigned_agent_id, 
+               t.created_at, t.resolved_at, t.resolution_notes
         FROM tickets t
         WHERE t.ticket_id = %s
         """
@@ -203,7 +209,7 @@ class CareDeskAgent(BaseAgent):
         SELECT ticket_id, user_id, issue_type, title, description, 
                priority, status, assigned_agent_id, created_at, resolved_at
         FROM tickets
-        WHERE reference_id = %s AND reference_type = 'ORDER'
+        WHERE order_id = %s
         ORDER BY created_at DESC
         """
         

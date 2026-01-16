@@ -69,10 +69,15 @@ class ShopCoreAgent(BaseAgent):
         
         if any(word in query_lower for word in ['order', 'ordered', 'purchase', 'bought']):
             return "ORDER_LOOKUP"
+        elif 'where is my' in query_lower:
+            return "ORDER_LOOKUP"
         elif any(word in query_lower for word in ['product', 'item', 'find', 'search']):
             return "PRODUCT_SEARCH"
         elif 'my orders' in query_lower or 'order history' in query_lower:
             return "USER_ORDERS"
+        # If product keywords are found and 'my' is in query, assume order lookup
+        elif 'my' in query_lower and len(self._extract_product_keywords(query)) > 0:
+            return "ORDER_LOOKUP"
         else:
             return "GENERIC"
     
@@ -83,48 +88,70 @@ class ShopCoreAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Handle order lookup queries"""
         
-        # Extract product name or order details from query
+        # Extract context
         user_id = context.get('user_id') if context else None
+        
+        # 1. Try to get Order ID from Text first (Explicit Override Logic)
+        order_id = self._extract_order_id_from_text(query)
+        
+        # 2. Fallback to context ONLY if we didn't extract a new one and it's a follow-up
+        # But we must distinguish between "Checking status" (contextual) and "Where is my X" (new search)
+        is_new_name_search = any(word in query.lower() for word in ['where', 'find', 'status of', 'search', 'buy', 'bought'])
+        
+        if not order_id and context and not is_new_name_search:
+            order_id = context.get('order_id')
         
         # Extract product keywords from query
         product_keywords = self._extract_product_keywords(query)
         
         # Build SQL to find orders - filter by product name if mentioned
         if user_id:
-            if product_keywords and len(product_keywords) > 2:  # Only filter if we have meaningful keywords
+            if product_keywords and len(product_keywords) > 2 and not order_id:  # Only filter if we have meaningful keywords
                 # Try multiple variations of the product name search
+                pass # Logic continued in original, but since we prioritized order_id, we can streamline.
+                     # Actually, the original logic had the ILIKE query in the `else` of `if order_id`. 
+                     # I need to structure it:
+                     # IF order_id: Specific query
+                     # ELSE: Generic query (with product keywords)
+
+            # Efficiency Fix: If order_id is explicit, prioritize finding it (Admin/Support view logic)
+            if order_id:
+                logger.info(f"Looking up specific Order {order_id} (ignoring strict user ownership for efficiency)")
+                sql = """
+                SELECT o.order_id, p.name as product_name, o.order_date, 
+                       o.status, o.quantity, o.total_amount, o.special_notes
+                FROM orders o
+                JOIN products p ON o.product_id = p.product_id
+                WHERE o.order_id = %s
+                """
+                params = (order_id,)
+            else:
+                # Hybrid search: Match name with spaces OR hyphens
                 sql = """
                 SELECT o.order_id, p.name as product_name, o.order_date, 
                        o.status, o.quantity, o.total_amount, o.special_notes
                 FROM orders o
                 JOIN products p ON o.product_id = p.product_id
                 WHERE o.user_id = %s AND (
-                    LOWER(p.name) LIKE %s OR 
-                    LOWER(p.name) LIKE %s OR
-                    LOWER(p.name) LIKE %s
+                    p.name ILIKE %s OR 
+                    p.name ILIKE %s OR
+                    p.name ILIKE %s OR
+                    p.name ILIKE %s
                 )
                 ORDER BY o.order_date DESC
                 LIMIT 10
                 """
-                # Try with hyphen, without hyphen, and with spaces
-                keywords_lower = product_keywords.lower()
+                # Handle hyphen variations
+                clean_kw = product_keywords.replace('-', ' ')
+                hyphen_kw = product_keywords.replace(' ', '-')
+                
                 params = (
                     user_id, 
-                    f"%{keywords_lower}%",
-                    f"%{keywords_lower.replace('-', '')}%",
-                    f"%{keywords_lower.replace('-', ' ')}%"
+                    f"%{product_keywords}%",
+                    f"%{clean_kw}%",
+                    f"%{hyphen_kw}%",
+                    f"%{product_keywords.replace(' ', '')}%"
                 )
-            else:
-                sql = """
-                SELECT o.order_id, p.name as product_name, o.order_date, 
-                       o.status, o.quantity, o.total_amount, o.special_notes
-                FROM orders o
-                JOIN products p ON o.product_id = p.product_id
-                WHERE o.user_id = %s
-                ORDER BY o.order_date DESC
-                LIMIT 10
-                """
-                params = (user_id,)
         else:
             # Try to extract product name from query
             if product_keywords and len(product_keywords) > 2:
@@ -134,7 +161,7 @@ class ShopCoreAgent(BaseAgent):
                 FROM orders o
                 JOIN products p ON o.product_id = p.product_id
                 JOIN users u ON o.user_id = u.user_id
-                WHERE LOWER(p.name) LIKE %s
+                WHERE p.name ILIKE %s
                 ORDER BY o.order_date DESC
                 LIMIT 10
                 """
@@ -230,19 +257,29 @@ class ShopCoreAgent(BaseAgent):
     def _extract_product_keywords(self, query: str) -> str:
         """Extract product keywords from query"""
         # Simple keyword extraction - remove common words but keep product names
-        stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'my', 'i', 'where', 'what', 'find', 'search', 'ordered', 'order', 'purchase', 'bought', 'when', 'will', 'it', 'arrive', 'status', 'payment', 'days', 'ago'}
+        stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'my', 'i', 'where', 'what', 'find', 'search', 'ordered', 'order', 'purchase', 'bought', 'when', 'will', 'it', 'arrive', 'status', 'payment', 'days', 'ago', 'do', 'have', 'any', 'support', 'tickets', 'for'}
         
-        # First, try to find product names (words with hyphens or capital letters)
+        # 1. Clean query of punctuation
+        clean_query = query.replace('?', '').replace('.', '').replace(',', '').strip()
+        
+        # 2. Try to find Capitalized Product Names first (e.g. Wireless Noise-Canceling Headphones)
         import re
         # Look for product-like patterns: USB-C Hub, Gaming Monitor, etc.
-        product_patterns = re.findall(r'\b[A-Z][A-Za-z0-9-]+\s+[A-Z][A-Za-z]+|\b[A-Z][A-Za-z0-9-]+', query)
-        if product_patterns:
-            # Return the first product-like pattern found
-            return ' '.join(product_patterns[0].split()).lower()
+        # Matches Title Case words (single or multi-word)
+        product_patterns = re.findall(r'\b[A-Z][a-zA-Z0-9-]+\b(?:\s+[A-Z][a-zA-Z0-9-]+\b)*', clean_query)
         
-        # Fallback: remove stop words
-        words = query.lower().split()
-        keywords = ' '.join([w for w in words if w not in stop_words])
+        if product_patterns:
+            # Check if patterns are just stop words (e.g. "Where")
+            for pattern in product_patterns:
+                if pattern.lower() not in stop_words and len(pattern) > 3:
+                    logger.info(f"Found product pattern: {pattern}")
+                    return pattern.lower()
+        
+        # 3. Fallback: remove stop words
+        words = clean_query.lower().split()
+        keywords_list = [w for w in words if w not in stop_words]
+        keywords = ' '.join(keywords_list)
+        
         # Clean up the keywords - remove extra spaces
         keywords = ' '.join(keywords.split())
         return keywords if keywords and len(keywords) > 1 else ''

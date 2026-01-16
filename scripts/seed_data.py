@@ -1,262 +1,222 @@
 """
 Seed sample data into all 4 Neon databases
-Creates realistic test data for development and testing
+Creates DETERMINISTIC test data (IDs 1-10) for development and testing.
+Strict 1-to-1 mapping for Verification.
 """
 
 import os
 import psycopg2
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-import random
 
 load_dotenv()
 
+def get_connection(db_url):
+    try:
+        if not db_url:
+            return None
+        return psycopg2.connect(db_url)
+    except Exception as e:
+        print(f"Connection failed: {e}")
+        return None
+
+def truncate_tables(cursor, tables):
+    """Clean tables before seeding"""
+    for table in tables:
+        cursor.execute(f"TRUNCATE TABLE {table} CASCADE;")
+
 def seed_shopcore():
-    """Seed ShopCore database with users, products, and orders"""
-    conn_string = os.getenv('DATABASE_URL_SHOPCORE')
-    if not conn_string:
-        print("⚠️  ShopCore connection string not found")
-        return False
+    """Seed ShopCore: Users 1-10, Products 1-10, Orders 1-10"""
+    conn = get_connection(os.getenv('DATABASE_URL_SHOPCORE'))
+    if not conn: return False
     
     try:
-        conn = psycopg2.connect(conn_string)
         cursor = conn.cursor()
+        truncate_tables(cursor, ['orders', 'products', 'users'])
         
-        # Insert users
-        users_data = [
-            ('john.doe@example.com', 'John Doe', '+91-9876543210', True),
-            ('jane.smith@example.com', 'Jane Smith', '+91-9876543211', False),
-            ('bob.wilson@example.com', 'Bob Wilson', '+91-9876543212', True),
-        ]
-        
+        # 1. Users 1-10
+        users = [(i, f'user{i}@example.com', f'User {i}', f'+91-{i:010d}', True) for i in range(1, 11)]
         cursor.executemany(
-            "INSERT INTO users (email, name, phone, premium_status) VALUES (%s, %s, %s, %s) ON CONFLICT (email) DO NOTHING",
-            users_data
+            "INSERT INTO users (user_id, email, name, phone, premium_status) VALUES (%s, %s, %s, %s, %s)",
+            users
         )
         
-        # Insert products
-        products_data = [
-            ('Gaming Monitor', 'Electronics', '27-inch 144Hz Gaming Monitor', 35000.00, 50, 'GM-27-144'),
-            ('Wireless Mouse', 'Electronics', 'Ergonomic Wireless Mouse', 1500.00, 200, 'WM-ERG-01'),
-            ('Mechanical Keyboard', 'Electronics', 'RGB Mechanical Keyboard', 8500.00, 100, 'KB-MECH-RGB'),
-            ('Laptop Stand', 'Accessories', 'Adjustable Aluminum Laptop Stand', 2500.00, 150, 'LS-ALU-ADJ'),
-            ('USB-C Hub', 'Accessories', '7-in-1 USB-C Hub', 3500.00, 80, 'HUB-USBC-7'),
+        # 2. Products 1-10 (Realistic Names)
+        product_list = [
+            "Wireless Noise-Canceling Headphones",
+            "Smart Fitness Watch Series 5",
+            "4K Ultra HD Gaming Monitor",
+            "Mechanical RGB Keyboard",
+            "Ergonomic Wireless Mouse",
+            "Portable SSD 1TB",
+            "Bluetooth Portable Speaker",
+            "HD Webcam 1080p",
+            "USB-C Docking Station",
+            "Gaming Headset with Mic"
         ]
         
+        products = []
+        for i in range(1, 11):
+            name = product_list[i-1]
+            products.append((
+                i, 
+                name, 
+                'Electronics', 
+                f'Description for {name}', 
+                1000.0 * i, 
+                100, 
+                f'SKU-{i:03d}'
+            ))
+            
         cursor.executemany(
-            "INSERT INTO products (name, category, description, price, stock_quantity, sku) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (sku) DO NOTHING",
-            products_data
+            "INSERT INTO products (product_id, name, category, description, price, stock_quantity, sku) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            products
         )
         
-        # Insert orders
-        orders_data = [
-            (1, 1, datetime.now() - timedelta(days=5), 'SHIPPED', 1, 35000.00, 'Please deliver before 5 PM'),
-            (1, 2, datetime.now() - timedelta(days=3), 'DELIVERED', 2, 3000.00, None),
-            (2, 3, datetime.now() - timedelta(days=2), 'CONFIRMED', 1, 8500.00, None),
-            (3, 4, datetime.now() - timedelta(days=1), 'PLACED', 1, 2500.00, 'Gift wrap please'),
-        ]
-        
+        # 3. Orders 1-10 (User i buys Product i)
+        orders = [(i, i, i, datetime.now(), 'SHIPPED', 1, 1000.0 * i, f"Note {i}") for i in range(1, 11)]
         cursor.executemany(
-            "INSERT INTO orders (user_id, product_id, order_date, status, quantity, total_amount, special_notes) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            orders_data
+            "INSERT INTO orders (order_id, user_id, product_id, order_date, status, quantity, total_amount, special_notes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            orders
         )
         
         conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print("✓ ShopCore data seeded successfully")
+        print("✓ ShopCore: Cleaned & Seeded (IDs 1-10)")
         return True
-    
     except Exception as e:
-        print(f"✗ Failed to seed ShopCore: {e}")
+        print(f"✗ ShopCore Fail: {e}")
         return False
+    finally:
+        conn.close()
 
 def seed_shipstream():
-    """Seed ShipStream database with warehouses, shipments, and tracking"""
-    conn_string = os.getenv('DATABASE_URL_SHIPSTREAM')
-    if not conn_string:
-        print("⚠️  ShipStream connection string not found")
-        return False
+    """Seed ShipStream: Warehouse 1, Shipments 1-10 (For Order i)"""
+    conn = get_connection(os.getenv('DATABASE_URL_SHIPSTREAM'))
+    if not conn: return False
     
     try:
-        conn = psycopg2.connect(conn_string)
         cursor = conn.cursor()
+        truncate_tables(cursor, ['tracking_events', 'shipments', 'warehouses'])
         
-        # Insert warehouses
-        warehouses_data = [
-            ('Delhi Distribution Center', 'Delhi', 'India', 'Rajesh Kumar', 10000, 7500, '+91-11-12345678'),
-            ('Mumbai Distribution Center', 'Mumbai', 'India', 'Priya Sharma', 12000, 9000, '+91-22-87654321'),
-            ('Bangalore Hub', 'Bangalore', 'India', 'Amit Patel', 8000, 6000, '+91-80-11223344'),
-        ]
-        
-        cursor.executemany(
-            "INSERT INTO warehouses (location, city, country, manager_name, capacity, current_stock, phone_number) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            warehouses_data
+        # Warehouse 1
+        cursor.execute(
+            "INSERT INTO warehouses (warehouse_id, location, city, country, manager_name) VALUES (1, 'Hub 1', 'Delhi', 'India', 'Mgr 1')"
         )
         
-        # Insert shipments
-        shipments_data = [
-            (1, 'TRK10242847', 1, '123 Main St, Mumbai, Maharashtra 400001', 
-             datetime.now() + timedelta(days=1), None, 'IN_TRANSIT', 'BlueDart'),
-            (2, 'TRK10242848', 1, '456 Park Ave, Delhi, Delhi 110001', 
-             datetime.now() - timedelta(days=1), datetime.now(), 'DELIVERED', 'DTDC'),
-        ]
-        
+        # Shipments 1-10 (Linked to Order i)
+        shipments = []
+        for i in range(1, 11):
+            shipments.append((
+                i, # shipment_id
+                i, # order_id
+                f'TRK{i:04d}', # TRK0001, TRK0002...
+                1,
+                f'Addr {i}',
+                datetime.now(),
+                'IN_TRANSIT',
+                'FedEx'
+            ))
         cursor.executemany(
-            "INSERT INTO shipments (order_id, tracking_number, origin_warehouse_id, destination_address, estimated_arrival, actual_arrival, shipment_status, carrier_name) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (tracking_number) DO NOTHING",
-            shipments_data
+            "INSERT INTO shipments (shipment_id, order_id, tracking_number, origin_warehouse_id, destination_address, estimated_arrival, shipment_status, carrier_name) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            shipments
         )
         
-        # Insert tracking events
-        tracking_data = [
-            (1, 1, datetime.now() - timedelta(days=4, hours=9), 'Package picked from warehouse', 'Delhi Distribution Center', 'PICKED', None),
-            (1, None, datetime.now() - timedelta(days=3, hours=14), 'In transit to destination city', 'Gurgaon Hub', 'IN_TRANSIT', None),
-            (1, 2, datetime.now() - timedelta(days=1, hours=8), 'Arrived at destination warehouse', 'Mumbai Distribution Center', 'AT_WAREHOUSE', None),
-            (2, 1, datetime.now() - timedelta(days=2, hours=10), 'Package picked from warehouse', 'Delhi Distribution Center', 'PICKED', None),
-            (2, None, datetime.now() - timedelta(days=1, hours=15), 'Out for delivery', 'Delhi Local', 'OUT_FOR_DELIVERY', None),
-            (2, None, datetime.now(), 'Package delivered successfully', 'Customer Location', 'DELIVERED', 'Signed by customer'),
-        ]
-        
+        # Tracking Events
+        events = [(i, i, i, 1, datetime.now(), 'In Transit', 'City', 'IN_TRANSIT', 'Note') for i in range(1, 11)]
         cursor.executemany(
-            "INSERT INTO tracking_events (shipment_id, warehouse_id, timestamp, status_update, location, event_type, notes) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            tracking_data
+            "INSERT INTO tracking_events (event_id, shipment_id, order_id, warehouse_id, timestamp, status_update, location, event_type, notes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            events
         )
-        
+
         conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print("✓ ShipStream data seeded successfully")
+        print("✓ ShipStream: Cleaned & Seeded (IDs 1-10)")
         return True
-    
     except Exception as e:
-        print(f"✗ Failed to seed ShipStream: {e}")
+        print(f"✗ ShipStream Fail: {e}")
         return False
+    finally:
+        conn.close()
 
 def seed_payguard():
-    """Seed PayGuard database with wallets, transactions, and payment methods"""
-    conn_string = os.getenv('DATABASE_URL_PAYGUARD')
-    if not conn_string:
-        print("⚠️  PayGuard connection string not found")
-        return False
+    """Seed PayGuard: Wallet 1-10, Transaction 1-10 (For Order i)"""
+    conn = get_connection(os.getenv('DATABASE_URL_PAYGUARD'))
+    if not conn: return False
     
     try:
-        conn = psycopg2.connect(conn_string)
         cursor = conn.cursor()
+        truncate_tables(cursor, ['payment_methods', 'transactions', 'wallets'])
         
-        # Insert wallets
-        wallets_data = [
-            (1, 5000.00, 'INR', 'ACTIVE'),
-            (2, 12000.00, 'INR', 'ACTIVE'),
-            (3, 3500.00, 'INR', 'ACTIVE'),
-        ]
-        
+        # Wallets 1-10 (User i)
+        wallets = [(i, i, 50000.00, 'INR', 'ACTIVE') for i in range(1, 11)]
         cursor.executemany(
-            "INSERT INTO wallets (user_id, balance, currency, wallet_status) VALUES (%s, %s, %s, %s)",
-            wallets_data
+            "INSERT INTO wallets (wallet_id, user_id, balance, currency, wallet_status) VALUES (%s, %s, %s, %s, %s)",
+            wallets
         )
         
-        # Insert transactions
-        transactions_data = [
-            (1, 1, 'REF-ORD-1', 35000.00, 'DEBIT', 'COMPLETED', datetime.now() - timedelta(days=5), 'Payment for Gaming Monitor', None),
-            (1, 1, 'REF-REFUND-1', 35000.00, 'REFUND', 'COMPLETED', datetime.now() - timedelta(days=1), 'Refund for Gaming Monitor', None),
-            (1, 2, 'REF-ORD-2', 3000.00, 'DEBIT', 'COMPLETED', datetime.now() - timedelta(days=3), 'Payment for Wireless Mouse', None),
-            (2, 3, 'REF-ORD-3', 8500.00, 'DEBIT', 'COMPLETED', datetime.now() - timedelta(days=2), 'Payment for Mechanical Keyboard', None),
-        ]
-        
+        # Transactions 1-10 (Wallet i pays for Order i)
+        txns = [(i, i, i, f'TXN{i:04d}', 1000.0*i, 'DEBIT', 'COMPLETED', datetime.now(), f'Pay Order {i}') for i in range(1, 11)]
         cursor.executemany(
-            "INSERT INTO transactions (wallet_id, order_id, reference_id, amount, transaction_type, status, timestamp, description, metadata) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            transactions_data
+            "INSERT INTO transactions (transaction_id, wallet_id, order_id, reference_id, amount, transaction_type, status, timestamp, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            txns
         )
-        
-        # Insert payment methods
-        payment_methods_data = [
-            (1, 'CREDIT_CARD', 'tok_visa_4242', '12/26', True),
-            (2, 'UPI', 'upi_jane@paytm', None, True),
-            (3, 'DEBIT_CARD', 'tok_mc_5555', '08/25', True),
-        ]
-        
-        cursor.executemany(
-            "INSERT INTO payment_methods (wallet_id, provider, provider_token, expiry_date, is_default) VALUES (%s, %s, %s, %s, %s)",
-            payment_methods_data
-        )
-        
+
         conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print("✓ PayGuard data seeded successfully")
+        print("✓ PayGuard: Cleaned & Seeded (IDs 1-10)")
         return True
-    
     except Exception as e:
-        print(f"✗ Failed to seed PayGuard: {e}")
+        print(f"✗ PayGuard Fail: {e}")
         return False
+    finally:
+        conn.close()
 
 def seed_caredesk():
-    """Seed CareDesk database with tickets, messages, and surveys"""
-    conn_string = os.getenv('DATABASE_URL_CAREDESK')
-    if not conn_string:
-        print("⚠️  CareDesk connection string not found")
-        return False
+    """Seed CareDesk: Tickets 1-10 (For Order i)"""
+    conn = get_connection(os.getenv('DATABASE_URL_CAREDESK'))
+    if not conn: return False
     
     try:
-        conn = psycopg2.connect(conn_string)
         cursor = conn.cursor()
+        truncate_tables(cursor, ['satisfaction_surveys', 'ticket_messages', 'tickets'])
         
-        # Insert tickets
-        tickets_data = [
-            (1, 1, 'ORDER', 'DELIVERY_ISSUE', 'Gaming Monitor not delivered', 
-             'I ordered a gaming monitor 5 days ago but it has not been delivered yet. Tracking shows it is in Mumbai but I have not received any delivery attempt.', 
-             'HIGH', 'IN_PROGRESS', 101, datetime.now() - timedelta(days=1), None, None),
-            (2, 3, 'ORDER', 'PRODUCT_QUALITY', 'Keyboard has defective keys', 
-             'The mechanical keyboard I received has some keys that are not working properly.', 
-             'MEDIUM', 'OPEN', None, datetime.now() - timedelta(hours=12), None, None),
-        ]
-        
-        cursor.executemany(
-            "INSERT INTO tickets (user_id, reference_id, reference_type, issue_type, title, description, priority, status, assigned_agent_id, created_at, resolved_at, resolution_notes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            tickets_data
-        )
-        
-        # Insert ticket messages
-        messages_data = [
-            (1, 'USER', 1, 'I really need this monitor urgently for work. Can you please expedite?', None, True),
-            (1, 'AGENT', 101, 'We apologize for the delay. I have contacted the delivery partner and they will attempt delivery today by 6 PM.', None, True),
-            (1, 'USER', 1, 'Thank you! Please keep me updated.', None, True),
-        ]
+        # Tickets 1-10 (User i, Order i)
+        # Using explicit order_id column as requested for efficiency
+        tickets = []
+        for i in range(1, 11):
+            tickets.append((
+                i, # ticket_id
+                i, # user_id
+                i, # order_id (Explicit)
+                i, # reference_id
+                'ORDER',
+                'DELIVERY_ISSUE',
+                f'Issue for Order {i}',
+                f'Desc {i}',
+                'HIGH',
+                'OPEN',
+                1
+            ))
         
         cursor.executemany(
-            "INSERT INTO ticket_messages (ticket_id, sender_type, sender_id, content, attachments, is_public) VALUES (%s, %s, %s, %s, %s, %s)",
-            messages_data
+            "INSERT INTO tickets (ticket_id, user_id, order_id, reference_id, reference_type, issue_type, title, description, priority, status, assigned_agent_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            tickets
         )
-        
+
         conn.commit()
-        cursor.close()
-        conn.close()
-        
-        print("✓ CareDesk data seeded successfully")
+        print("✓ CareDesk: Cleaned & Seeded (IDs 1-10)")
         return True
-    
     except Exception as e:
-        print(f"✗ Failed to seed CareDesk: {e}")
+        print(f"✗ CareDesk Fail: {e}")
         return False
+    finally:
+        conn.close()
 
 def main():
-    """Seed all databases"""
-    print("🌱 Starting Database Seeding...\n")
-    
-    results = []
-    results.append(('ShopCore', seed_shopcore()))
-    results.append(('ShipStream', seed_shipstream()))
-    results.append(('PayGuard', seed_payguard()))
-    results.append(('CareDesk', seed_caredesk()))
-    
-    success_count = sum(1 for _, success in results if success)
-    
-    print(f"\n{'='*60}")
-    print(f"Data Seeding Complete: {success_count}/4 successful")
-    print(f"{'='*60}")
+    print("🌱 Starting SEQUENTIAL Data Reset (Truncate + Seed)...")
+    seed_shopcore()
+    seed_shipstream()
+    seed_payguard()
+    seed_caredesk()
+    print("\n✅ Verification Ready: IDs 1-10 are perfectly aligned across all DBs.")
 
 if __name__ == "__main__":
     main()

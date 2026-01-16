@@ -40,7 +40,7 @@ export default function Home() {
           <span className="text-xl font-extrabold tracking-tight">OmniRetail</span>
         </div>
         <div className="flex items-center gap-6">
-          <button 
+          <button
             onClick={() => setIsDark(!isDark)}
             className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
           >
@@ -146,7 +146,7 @@ export default function Home() {
             </div>
           </div>
           <div className="mt-12 text-slate-400 text-sm">
-            © 2024 Omni-Retail Intelligence System. All rights reserved.
+            © 2026 Omni-Retail Intelligence System. All rights reserved.
           </div>
         </div>
       </footer>

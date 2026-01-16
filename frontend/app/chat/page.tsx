@@ -137,6 +137,28 @@ export default function ChatPage() {
     }
   };
 
+  const handleNewChat = async () => {
+    // 1. Clear local UI messages
+    setMessages([]);
+    setInput('');
+
+    // 2. Send 'reset' command to backend to wipe session memory
+    const resetQuery = 'reset';
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        query: resetQuery,
+        user_id: 1
+      }));
+    } else {
+      await fetch('http://localhost:8000/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: resetQuery, user_id: 1 })
+      });
+    }
+    console.log('✓ Session reset triggered');
+  };
+
   const sendViaRestAPI = async (query: string) => {
     try {
       const response = await fetch('http://localhost:8000/query', {
@@ -187,9 +209,9 @@ export default function ChatPage() {
   };
 
   const suggestedPrompts = [
-    { icon: '📦', text: '"Where is my Gaming Monitor?"', desc: 'Track current shipment status' },
-    { icon: '💳', text: '"What\'s the status of my refund?"', desc: 'Check payment and return status' },
-    { icon: '🎫', text: '"Can you check my support ticket?"', desc: 'View updates on active cases' }
+    { icon: '🎧', text: '"Where is my Wireless Noise-Canceling Headphones?"', desc: 'Track current shipment status' },
+    { icon: '💳', text: '"Check wallet for Order 2"', desc: 'Verify payment and balance' },
+    { icon: '🎫', text: '"Check support ticket for Order 5"', desc: 'View updates on active cases' }
   ];
 
   return (
@@ -210,7 +232,14 @@ export default function ChatPage() {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium tracking-wide uppercase">Multi-Agent Support System</p>
           </div>
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 hover:bg-teal-600/10 hover:border-teal-600/20 transition-all text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400"
+          >
+            <span>✨</span> New Chat
+          </button>
+
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
             <span className="relative flex h-2 w-2">
               {wsConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
@@ -260,8 +289,8 @@ export default function ChatPage() {
               >
                 <div
                   className={`max-w-xl px-5 py-4 rounded-2xl backdrop-blur-md ${msg.type === 'user'
-                      ? 'bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-br-none shadow-lg shadow-teal-600/20'
-                      : 'bg-white/70 dark:bg-white/5 text-slate-900 dark:text-gray-100 rounded-bl-none border border-slate-200 dark:border-white/10'
+                    ? 'bg-gradient-to-r from-teal-600 to-emerald-500 text-white rounded-br-none shadow-lg shadow-teal-600/20'
+                    : 'bg-white/70 dark:bg-white/5 text-slate-900 dark:text-gray-100 rounded-bl-none border border-slate-200 dark:border-white/10'
                     }`}
                 >
                   <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>

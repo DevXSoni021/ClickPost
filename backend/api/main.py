@@ -93,7 +93,7 @@ async def process_query(request: QueryRequest):
     
     try:
         # Process query
-        response = super_agent.process_complex_query(
+        response = await super_agent.process_complex_query(
             request.query,
             user_id=request.user_id
         )
@@ -160,7 +160,7 @@ async def websocket_chat_endpoint(websocket: WebSocket):
             # Process query
             if super_agent and "query" in message:
                 try:
-                    response = super_agent.process_complex_query(
+                    response = await super_agent.process_complex_query(
                         message["query"],
                         user_id=message.get("user_id")
                     )
@@ -213,7 +213,7 @@ async def websocket_voice_endpoint(websocket: WebSocket):
             
             if "transcription" in data:
                 # Process transcribed text
-                response = super_agent.process_complex_query(
+                response = await super_agent.process_complex_query(
                     data["transcription"],
                     user_id=data.get("user_id")
                 )

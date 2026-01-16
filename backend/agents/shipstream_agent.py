@@ -50,13 +50,18 @@ class ShipStreamAgent(BaseAgent):
             Formatted response with shipment data
         """
         try:
-            # Check if we have order_id from context (from ShopCore agent)
-            order_id = context.get('order_id') if context else None
+            # 1. Try to extract order_id from text (Explicit Override Logic)
+            order_id = self._extract_order_id_from_text(natural_language_query)
+            
+            # 2. Fallback to context if not explicitly mentioned in text
+            if not order_id and context:
+                order_id = context.get('order_id')
             
             if order_id:
+                logger.info(f"Looking up shipment for Order {order_id} (Prioritized ID Lookup)")
                 return self._get_shipment_by_order_id(order_id)
             
-            # Check for tracking number in query
+            # 2. Check for tracking number in query
             tracking_number = self._extract_tracking_number(natural_language_query)
             if tracking_number:
                 return self._get_shipment_by_tracking(tracking_number)
