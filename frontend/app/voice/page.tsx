@@ -146,7 +146,19 @@ export default function VoicePage() {
           </div>
           <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white">Omni-Retail</span>
         </div>
-        <div className="flex gap-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              handleClear();
+              if (ws.current) {
+                ws.current.send(JSON.stringify({ transcription: 'reset', user_id: 1 }));
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 dark:bg-white/5 border border-white/20 dark:border-white/10 rounded-xl font-bold text-sm hover:bg-white/20 transition-all backdrop-blur-md"
+          >
+            <span>✨</span>
+            New Chat
+          </button>
           <button className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
             <span className="text-xl">⚙️</span>
           </button>
@@ -185,8 +197,8 @@ export default function VoicePage() {
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-md px-6 py-4 rounded-2xl backdrop-blur-md text-left ${msg.type === 'user'
-                      ? 'bg-violet-600 text-white rounded-br-none'
-                      : 'bg-white/10 text-white rounded-bl-none border border-white/10'
+                    ? 'bg-violet-600 text-white rounded-br-none'
+                    : 'bg-white/10 text-white rounded-bl-none border border-white/10'
                     }`}>
                     <p className="leading-relaxed">{msg.text}</p>
                   </div>
@@ -215,8 +227,8 @@ export default function VoicePage() {
             {isListening && <div className="absolute inset-0 bg-violet-500/30 rounded-full scale-150 blur-xl animate-pulse"></div>}
 
             <div className={`relative w-48 h-48 rounded-full flex items-center justify-center transition-all duration-500 ${isListening
-                ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-[0_0_60px_rgba(239,68,68,0.4)] scale-110'
-                : 'bg-[radial-gradient(circle_at_30%_30%,#a78bfa,#7c3aed)] shadow-[0_0_60px_rgba(139,92,246,0.4)] hover:scale-105'
+              ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-[0_0_60px_rgba(239,68,68,0.4)] scale-110'
+              : 'bg-[radial-gradient(circle_at_30%_30%,#a78bfa,#7c3aed)] shadow-[0_0_60px_rgba(139,92,246,0.4)] hover:scale-105'
               }`}>
               <span className="text-6xl text-white">
                 {isListening ? '⏹' : '🎤'}
@@ -300,8 +312,8 @@ export default function VoicePage() {
               <button
                 onClick={isListening ? handleStopListening : handleStartListening}
                 className={`flex-1 md:flex-none px-12 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-2xl transition-all hover:scale-[1.02] active:scale-[0.98] ${isListening
-                    ? 'bg-red-500 text-white shadow-red-500/40'
-                    : 'bg-violet-600 text-white shadow-violet-600/40'
+                  ? 'bg-red-500 text-white shadow-red-500/40'
+                  : 'bg-violet-600 text-white shadow-violet-600/40'
                   }`}
               >
                 <span>{isListening ? '⏹' : '🎤'}</span>
