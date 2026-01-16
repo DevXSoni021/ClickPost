@@ -1,0 +1,114 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.venv
+
+# Conda
+.conda/
+conda-meta/
+*.conda
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Documentation (keep only README.md)
+BROWSER_TEST_GUIDE.md
+CONDA_ENV_GUIDE.md
+CONDA_SETUP.md
+FIXED.md
+GOOGLE_ADK_SETUP.md
+IMPLEMENTATION_GUIDE.md
+IMPLEMENTATION_STATUS.md
+Implementation_Code_Part2.md
+NEON_SETUP_COMPLETE.md
+NEW_ENTRY_SUMMARY.md
+OmniRetail_Architecture_Plan.md
+PROJECT_SUMMARY.md
+QUICK_START.md
+RUNNING.md
+SETUP_COMPLETE.md
+START_GUIDE.md
+START_NOW.md
+TEST_RESULTS.md
+
+# Scripts
+activate_env.sh
+fix_nextjs.sh
+quick-start.sh
+setup-conda.sh
+setup-everything.sh
+setup-simple.sh
+start.sh
+test_all_apis.sh
+test_complete.sh
+
+# Node modules
+node_modules/
