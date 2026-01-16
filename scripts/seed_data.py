@@ -1,3 +1,9 @@
+"""
+Seed sample data into all 4 Neon databases
+Creates DETERMINISTIC test data (IDs 1-10) for development and testing.
+Strict 1-to-1 mapping for Verification.
+"""
+
 import os
 import psycopg2
 from dotenv import load_dotenv
@@ -15,12 +21,12 @@ def get_connection(db_url):
         return None
 
 def truncate_tables(cursor, tables):
-
+    """Clean tables before seeding"""
     for table in tables:
         cursor.execute(f"TRUNCATE TABLE {table} CASCADE;")
 
 def seed_shopcore():
-
+    """Seed ShopCore: Users 1-10, Products 1-10, Orders 1-10"""
     conn = get_connection(os.getenv('DATABASE_URL_SHOPCORE'))
     if not conn: return False
 
@@ -81,7 +87,7 @@ def seed_shopcore():
         conn.close()
 
 def seed_shipstream():
-
+    """Seed ShipStream: Warehouse 1, Shipments 1-10 (For Order i)"""
     conn = get_connection(os.getenv('DATABASE_URL_SHIPSTREAM'))
     if not conn: return False
 
@@ -98,7 +104,7 @@ def seed_shipstream():
             shipments.append((
                 i,
                 i,
-                f'TRK{i:04d}',
+                f'TRK{i:04d}', # TRK0001, TRK0002...
                 1,
                 f'Addr {i}',
                 datetime.now(),
@@ -126,7 +132,7 @@ def seed_shipstream():
         conn.close()
 
 def seed_payguard():
-
+    """Seed PayGuard: Wallet 1-10, Transaction 1-10 (For Order i)"""
     conn = get_connection(os.getenv('DATABASE_URL_PAYGUARD'))
     if not conn: return False
 
@@ -156,7 +162,7 @@ def seed_payguard():
         conn.close()
 
 def seed_caredesk():
-
+    """Seed CareDesk: Tickets 1-10 (For Order i)"""
     conn = get_connection(os.getenv('DATABASE_URL_CAREDESK'))
     if not conn: return False
 

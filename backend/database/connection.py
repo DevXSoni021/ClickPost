@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 def convert_to_json_serializable(obj: Any) -> Any:
     """
     Convert database types to JSON-serializable types
-    
+
     Args:
         obj: Object that may contain Decimal, datetime, etc.
-    
+
     Returns:
         JSON-serializable object
     """
@@ -39,11 +39,11 @@ def convert_to_json_serializable(obj: Any) -> Any:
 
 class DatabaseManager:
     """Manages connections to multiple Neon PostgreSQL databases"""
-    
+
     def __init__(self):
         self.pools: Dict[str, pool.SimpleConnectionPool] = {}
         self._initialize_pools()
-    
+
     def _initialize_pools(self):
         """Initialize connection pools for all 4 databases"""
         databases = {
@@ -52,12 +52,12 @@ class DatabaseManager:
             'payguard': os.getenv('DATABASE_URL_PAYGUARD'),
             'caredesk': os.getenv('DATABASE_URL_CAREDESK')
         }
-        
+
         for db_name, connection_string in databases.items():
             if not connection_string:
                 logger.warning(f"No connection string found for {db_name}")
                 continue
-            
+
             try:
                 self.pools[db_name] = pool.SimpleConnectionPool(
                     minconn=2,
@@ -68,24 +68,43 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"✗ Failed to initialize pool for {db_name}: {e}")
                 raise
-    
+
     @contextmanager
     def get_connection(self, db_name: str):
         """
-        Get a database connection from the pool
-        
-        Args:
-            db_name: Name of database (shopcore, shipstream, payguard, caredesk)
-        
-        Yields:
-            Database connection
+        Get a database connection from the pool with validation and retry
         """
         if db_name not in self.pools:
             raise ValueError(f"Unknown database: {db_name}")
-        
+
         conn = None
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                conn = self.pools[db_name].getconn()
+
+                if conn.closed == 0:
+                    try:
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT 1")
+                        break
+                    except psycopg2.OperationalError:
+                        self.pools[db_name].putconn(conn, close=True)
+                        conn = None
+                else:
+                    self.pools[db_name].putconn(conn, close=True)
+                    conn = None
+
+            except Exception as e:
+                logger.warning(f"Failed to get connection from pool (retry {retry_count}): {e}")
+
+            retry_count += 1
+            if retry_count >= max_retries and not conn:
+                raise Exception(f"Failed to connect to {db_name} after {max_retries} attempts")
+
         try:
-            conn = self.pools[db_name].getconn()
             yield conn
             conn.commit()
         except Exception as e:
@@ -95,8 +114,9 @@ class DatabaseManager:
             raise
         finally:
             if conn:
-                self.pools[db_name].putconn(conn)
-    
+                is_closed = conn.closed != 0
+                self.pools[db_name].putconn(conn, close=is_closed)
+
     def execute_query(
         self, 
         db_name: str, 
@@ -106,33 +126,31 @@ class DatabaseManager:
     ) -> List[Dict[str, Any]]:
         """
         Execute a SQL query with parameters
-        
+
         Args:
             db_name: Database name
             query: SQL query with %s placeholders
             params: Query parameters
             fetch: Whether to fetch results
-        
+
         Returns:
             List of dictionaries with query results
         """
         with self.get_connection(db_name) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query, params or ())
-                
+
                 if fetch and cursor.description:
                     columns = [desc[0] for desc in cursor.description]
                     rows = cursor.fetchall()
-                    # Convert rows to dictionaries and make JSON-serializable
                     results = []
                     for row in rows:
                         row_dict = dict(zip(columns, row))
-                        # Convert Decimal and other non-JSON types
                         results.append(convert_to_json_serializable(row_dict))
                     return results
-                
+
                 return []
-    
+
     def close_all(self):
         """Close all connection pools"""
         for db_name, pool_obj in self.pools.items():
@@ -142,7 +160,6 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Error closing pool for {db_name}: {e}")
 
-# Global database manager instance
 db_manager: Optional[DatabaseManager] = None
 
 def get_db_manager() -> DatabaseManager:

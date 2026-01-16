@@ -51,7 +51,7 @@ class HealthResponse(BaseModel):
 
 @app.on_event("startup")
 async def startup_event():
-
+    """Initialize super agent on startup"""
     global super_agent
     print("🚀 Starting Omni-Retail API Server...")
     try:
@@ -63,7 +63,7 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-
+    """Cleanup on shutdown"""
     global super_agent
     if super_agent:
         super_agent.cleanup()
@@ -71,7 +71,7 @@ async def shutdown_event():
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-
+    """Health check endpoint"""
     return HealthResponse(
         status="healthy",
         agents_initialized=super_agent is not None,
@@ -80,6 +80,7 @@ async def health_check():
 
 @app.post("/query", response_model=QueryResponse)
 async def process_query(request: QueryRequest):
+    """Process complex multi-agent query"""
 
     if not super_agent:
         raise HTTPException(status_code=503, detail="Super Agent not initialized")
@@ -103,7 +104,7 @@ async def process_query(request: QueryRequest):
 
 @app.get("/agents/status")
 async def get_agents_status():
-
+    """Get status of all sub-agents"""
     if not super_agent:
         raise HTTPException(status_code=503, detail="Super Agent not initialized")
 
@@ -120,7 +121,7 @@ async def get_agents_status():
 
 @app.get("/conversation-history")
 async def get_conversation_history(user_id: Optional[int] = None):
-
+    """Get conversation history"""
     if not super_agent:
         raise HTTPException(status_code=503, detail="Super Agent not initialized")
 
@@ -132,7 +133,7 @@ async def get_conversation_history(user_id: Optional[int] = None):
 
 @app.websocket("/ws/chat")
 async def websocket_chat_endpoint(websocket: WebSocket):
-
+    """WebSocket endpoint for real-time chat"""
     await websocket.accept()
 
     try:
@@ -192,7 +193,7 @@ async def websocket_chat_endpoint(websocket: WebSocket):
 
 @app.websocket("/ws/voice")
 async def websocket_voice_endpoint(websocket: WebSocket):
-
+    """WebSocket endpoint for voice interaction (Google ADK)"""
     await websocket.accept()
 
     try:

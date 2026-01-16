@@ -1,12 +1,33 @@
+"""
+PayGuard Agent - Handles payment, transactions, and refund queries
+"""
+
 from typing import Dict, Any, Optional, List
 from backend.agents.base_agent import BaseAgent
 import logging
 
 logger = logging.getLogger(__name__)
 
-PAYGUARD_SCHEMA = 
+PAYGUARD_SCHEMA = """
+Tables:
+1. wallets (wallet_id, user_id, balance, currency, wallet_status, created_at, last_updated)
+2. transactions (transaction_id, wallet_id, order_id, reference_id, amount, transaction_type, 
+                 status, timestamp, description, metadata)
+3. payment_methods (method_id, wallet_id, provider, provider_token, expiry_date, is_default, 
+                     created_at, last_used)
+
+Relationships:
+- transactions.wallet_id -> wallets.wallet_id
+- payment_methods.wallet_id -> wallets.wallet_id
+- wallets.user_id links to users in ShopCore
+
+Transaction Types: DEBIT, REFUND, CREDIT, REVERSAL
+Transaction Status: PENDING, COMPLETED, FAILED, REVERSED
+Payment Providers: CREDIT_CARD, DEBIT_CARD, PAYPAL, BANK_TRANSFER, UPI
+"""
 
 class PayGuardAgent(BaseAgent):
+    """Agent for handling payment and transaction queries"""
 
     def __init__(self):
         super().__init__(
@@ -20,7 +41,16 @@ class PayGuardAgent(BaseAgent):
         natural_language_query: str, 
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        """
+        Process payment and transaction queries
 
+        Args:
+            natural_language_query: User's query about payments/refunds
+            context: Additional context (order_id, user_id, etc.)
+
+        Returns:
+            Formatted response with transaction data
+        """
         try:
             query_lower = natural_language_query.lower()
 
@@ -45,16 +75,33 @@ class PayGuardAgent(BaseAgent):
             return self.handle_error(e)
 
     def _handle_refund_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Handle refund status queries"""
 
         order_id = context.get('order_id') if context else None
         user_id = context.get('user_id') if context else None
 
         if order_id:
-            sql = 
+            sql = """
+            SELECT t.transaction_id, t.order_id, t.amount, t.transaction_type, 
+                   t.status, t.timestamp, t.description, w.user_id
+            FROM transactions t
+            JOIN wallets w ON t.wallet_id = w.wallet_id
+            WHERE t.order_id = %s AND t.transaction_type = 'REFUND'
+            ORDER BY t.timestamp DESC
+            LIMIT 1
+            """
             params = (order_id,)
 
         elif user_id:
-            sql = 
+            sql = """
+            SELECT t.transaction_id, t.order_id, t.amount, t.transaction_type, 
+                   t.status, t.timestamp, t.description
+            FROM transactions t
+            JOIN wallets w ON t.wallet_id = w.wallet_id
+            WHERE w.user_id = %s AND t.transaction_type = 'REFUND'
+            ORDER BY t.timestamp DESC
+            LIMIT 10
+            """
             params = (user_id,)
 
         else:
@@ -78,16 +125,29 @@ class PayGuardAgent(BaseAgent):
         return self.format_response(results)
 
     def _handle_wallet_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Handle wallet balance queries"""
 
         user_id = context.get('user_id') if context else None
         order_id = context.get('order_id') if context else None
 
         if order_id:
-            sql = 
+            sql = """
+            SELECT w.wallet_id, w.user_id, w.balance, w.currency, w.wallet_status, 
+                   w.created_at, w.last_updated
+            FROM wallets w
+            JOIN transactions t ON w.wallet_id = t.wallet_id
+            WHERE t.order_id = %s
+            LIMIT 1
+            """
             return self.format_response(self.execute_query(sql, (order_id,)))
 
         elif user_id:
-            sql = 
+            sql = """
+            SELECT wallet_id, user_id, balance, currency, wallet_status, 
+                   created_at, last_updated
+            FROM wallets
+            WHERE user_id = %s
+            """
             return self.format_response(self.execute_query(sql, (user_id,)))
 
         else:
@@ -99,16 +159,31 @@ class PayGuardAgent(BaseAgent):
             }
 
     def _handle_transaction_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Handle transaction history queries"""
 
         order_id = context.get('order_id') if context else None
         user_id = context.get('user_id') if context else None
 
         if order_id:
-            sql = 
+            sql = """
+            SELECT t.transaction_id, t.order_id, t.amount, t.transaction_type, 
+                   t.status, t.timestamp, t.description
+            FROM transactions t
+            WHERE t.order_id = %s
+            ORDER BY t.timestamp DESC
+            """
             params = (order_id,)
 
         elif user_id:
-            sql = 
+            sql = """
+            SELECT t.transaction_id, t.order_id, t.amount, t.transaction_type, 
+                   t.status, t.timestamp, t.description
+            FROM transactions t
+            JOIN wallets w ON t.wallet_id = w.wallet_id
+            WHERE w.user_id = %s
+            ORDER BY t.timestamp DESC
+            LIMIT 20
+            """
             params = (user_id,)
 
         else:
@@ -127,6 +202,7 @@ class PayGuardAgent(BaseAgent):
         query: str, 
         context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
+        """Handle generic payment queries"""
 
         sql = self.generate_sql(query, context)
         params = self.extract_parameters(sql, context or {})
@@ -135,15 +211,38 @@ class PayGuardAgent(BaseAgent):
         return self.format_response(results)
 
     def get_payment_methods(self, user_id: int) -> Dict[str, Any]:
+        """Get payment methods for a user"""
 
-        sql = 
+        sql = """
+        SELECT pm.method_id, pm.provider, pm.expiry_date, pm.is_default, 
+               pm.created_at, pm.last_used
+        FROM payment_methods pm
+        JOIN wallets w ON pm.wallet_id = w.wallet_id
+        WHERE w.user_id = %s
+        ORDER BY pm.is_default DESC, pm.last_used DESC
+        """
 
         results = self.execute_query(sql, (user_id,))
         return self.format_response(results)
 
     def get_transaction_by_order(self, order_id: int) -> Dict[str, Any]:
+        """
+        Get all transactions for an order (used by orchestrator)
 
-        sql = 
+        Args:
+            order_id: Order ID to look up
+
+        Returns:
+            Transaction information
+        """
+        sql = """
+        SELECT t.transaction_id, t.order_id, t.amount, t.transaction_type, 
+               t.status, t.timestamp, t.description, w.user_id
+        FROM transactions t
+        JOIN wallets w ON t.wallet_id = w.wallet_id
+        WHERE t.order_id = %s
+        ORDER BY t.timestamp DESC
+        """
 
         results = self.execute_query(sql, (order_id,))
         return self.format_response(results)

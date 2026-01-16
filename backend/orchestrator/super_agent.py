@@ -1,3 +1,8 @@
+"""
+Super Agent - Orchestrates multiple specialized agents using LangGraph
+Handles query analysis, dependency resolution, and response synthesis
+"""
+
 import os
 import logging
 import asyncio
@@ -13,20 +18,24 @@ from backend.agents.caredesk_agent import CareDeskAgent
 logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
-
+    """State schema for workflow"""
     original_query: str
     user_id: Optional[int]
     agents_needed: Dict[str, bool]
-    execution_order: List[List[str]]
+    execution_order: List[List[str]] # List of lists for stages (e.g., [['ShopCore'], ['ShipStream', 'CareDesk']])
     context: Dict[str, Any]
     agent_results: Dict[str, Any]
     narrative_response: str
     timestamp: str
 
 class OmniRetailSuperAgent:
+    """
+    Super Agent that orchestrates multiple specialized agents
+    Architecture: Planner -> Parallel Execution -> Result Merger
+    """
 
     def __init__(self):
-
+        """Initialize super agent with all sub-agents"""
         self.shopcore_agent = ShopCoreAgent()
         self.shipstream_agent = ShipStreamAgent()
         self.payguard_agent = PayGuardAgent()
@@ -46,7 +55,9 @@ class OmniRetailSuperAgent:
         logger.info("✓ Super Agent initialized with 4 sub-agents")
 
     def analyze_query(self, query: str, user_id: Optional[int] = None, session_context: Optional[Dict[str, Any]] = None) -> AgentState:
-
+        """
+        Planner: Analyzes query to determine required agents and dependencies
+        """
         query_lower = query.lower()
 
         agents_needed = {
@@ -93,7 +104,7 @@ class OmniRetailSuperAgent:
 
         if any(word in query_lower for word in ['track', 'delivery', 'shipment', 'where', 'location', 'arrive', 'delivered']) or (is_follow_up and 'order' not in query_lower): 
             agents_needed['ShipStream'] = True
-            agents_needed['ShopCore'] = True
+            agents_needed['ShopCore'] = True  # Dependency
 
         if any(word in query_lower for word in ['refund', 'payment', 'transaction', 'paid', 'wallet', 'balance', 'credit', 'debit']) or (is_follow_up and 'all' in query_lower):
             agents_needed['PayGuard'] = True
@@ -153,7 +164,7 @@ class OmniRetailSuperAgent:
         return state
 
     async def _run_agent_sync(self, agent_name: str, query: str, context: Dict[str, Any]) -> Dict[str, Any]:
-
+        """Wrapper to run synchronous agents in a thread"""
         try:
             logger.info(f"▶️  Starting {agent_name} Agent...")
             if agent_name == 'ShopCore':
@@ -171,7 +182,9 @@ class OmniRetailSuperAgent:
             return {'success': False, 'error': str(e), 'data': []}
 
     async def execute_agents(self, state: AgentState) -> AgentState:
-
+        """
+        Execution Layer: Executes agents in concurrent stages
+        """
         for stage in state['execution_order']:
             tasks = []
 
@@ -200,7 +213,9 @@ class OmniRetailSuperAgent:
         return state
 
     async def synthesize_response(self, state: AgentState) -> AgentState:
-
+        """
+        Synthesize natural language response from agent results
+        """
         if state.get('narrative_response'):
             return state
 
@@ -208,7 +223,12 @@ class OmniRetailSuperAgent:
             state['narrative_response'] = self._simple_synthesis(state)
             return state
 
-        prompt = f
+        prompt = f"""You are the Omni-Retail Super Agent. Synthesize a helpful response based strictly on the provided agent results.
+
+USER QUERY: {state['original_query']}
+
+AGENT RESULTS (Structured Data):
+"""
 
         has_data = False
         for agent_name, result in state['agent_results'].items():
@@ -224,7 +244,17 @@ class OmniRetailSuperAgent:
             else:
                 prompt += f"Status: Failed\nError: {result.get('error', 'Unknown')}\n"
 
-        prompt += 
+        prompt += """
+GUIDELINES:
+1. Answer the user's question directly using the data provided.
+2. If multiple agents returned data (e.g., Order details + Tracking), combine them into a coherent narrative.
+3. If an agent returned no data (e.g., "Data: []"), clearly state that no information was found for that aspect.
+4. Do NOT hallucinate. If data is missing/error, admit it.
+5. Do NOT mention internal SQL tables, IDs, or schema details unless necessary for clarity (like Order ID).
+6. Be concise and professional.
+7. If data comes from context (previous turns), acknowledge that you are referring to the previously discussed item.
+
+Final Answer:"""
 
         try:
             response = await asyncio.to_thread(self.model.generate_content, prompt)
@@ -236,7 +266,7 @@ class OmniRetailSuperAgent:
         return state
 
     def _simple_synthesis(self, state: AgentState) -> str:
-
+        """Simple fallback synthesis without LLM"""
         parts = []
         for agent_name, result in state['agent_results'].items():
             if result.get('success') and result.get('data'):
@@ -252,7 +282,9 @@ class OmniRetailSuperAgent:
         query: str, 
         user_id: Optional[int] = None
     ) -> Dict[str, Any]:
-
+        """
+        Main entry point: Process a complex multi-agent query (Async)
+        """
         logger.info(f"📝 Processing query: {query}")
 
         session_context = {}
@@ -294,5 +326,5 @@ class OmniRetailSuperAgent:
         return response
 
     def cleanup(self):
-
+        """Cleanup resources"""
         logger.info("Cleaning up Super Agent resources")

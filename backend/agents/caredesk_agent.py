@@ -1,12 +1,35 @@
+"""
+CareDesk Agent - Handles customer support tickets and queries
+"""
+
 from typing import Dict, Any, Optional, List
 from backend.agents.base_agent import BaseAgent
 import logging
 
 logger = logging.getLogger(__name__)
 
-CAREDESK_SCHEMA = 
+CAREDESK_SCHEMA = """
+Tables:
+1. tickets (ticket_id, user_id, order_id, reference_id, reference_type, issue_type, title, description, 
+            priority, status, assigned_agent_id, created_at, resolved_at, resolution_notes)
+2. ticket_messages (message_id, ticket_id, sender_type, sender_id, content, attachments, 
+                     created_at, is_public)
+3. satisfaction_surveys (survey_id, ticket_id, rating, comments, response_date, sentiment_analysis)
+
+Relationships:
+- ticket_messages.ticket_id -> tickets.ticket_id
+- satisfaction_surveys.ticket_id -> tickets.ticket_id
+- tickets.order_id -> orders.order_id (Hard Link)
+
+Reference Types: ORDER, TRANSACTION, GENERAL
+Issue Types: DELIVERY_ISSUE, PAYMENT_ISSUE, PRODUCT_QUALITY, REFUND_REQUEST, COMPLAINT
+Priority: LOW, MEDIUM, HIGH, URGENT
+Status: OPEN, IN_PROGRESS, ON_HOLD, RESOLVED, CLOSED
+Sender Types: USER, AGENT, SYSTEM
+"""
 
 class CareDeskAgent(BaseAgent):
+    """Agent for handling customer support queries"""
 
     def __init__(self):
         super().__init__(
@@ -20,7 +43,16 @@ class CareDeskAgent(BaseAgent):
         natural_language_query: str, 
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
+        """
+        Process customer support queries
 
+        Args:
+            natural_language_query: User's query about support tickets
+            context: Additional context (user_id, order_id, etc.)
+
+        Returns:
+            Formatted response with ticket data
+        """
         try:
             query_lower = natural_language_query.lower()
 
@@ -42,17 +74,31 @@ class CareDeskAgent(BaseAgent):
             return self.handle_error(e)
 
     def _handle_ticket_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Handle ticket status queries"""
 
         user_id = context.get('user_id') if context else None
         order_id = context.get('order_id') if context else None
 
         if order_id:
             logger.info(f"Looking up tickets via explicit Order ID: {order_id}")
-            sql = 
+            sql = """
+            SELECT t.ticket_id, t.order_id, t.issue_type, t.title, t.description, 
+                   t.priority, t.status, t.assigned_agent_id, t.created_at, t.resolved_at
+            FROM tickets t
+            WHERE t.order_id = %s
+            ORDER BY t.created_at DESC
+            """
             params = (order_id,)
 
         elif user_id:
-            sql = 
+            sql = """
+            SELECT t.ticket_id, t.order_id, t.issue_type, t.title, t.description, 
+                   t.priority, t.status, t.assigned_agent_id, t.created_at, t.resolved_at
+            FROM tickets t
+            WHERE t.user_id = %s
+            ORDER BY t.created_at DESC
+            LIMIT 10
+            """
             params = (user_id,)
 
         else:
@@ -73,6 +119,7 @@ class CareDeskAgent(BaseAgent):
         return self.format_response(results)
 
     def _handle_issue_query(self, context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Handle issue/complaint queries"""
 
         user_id = context.get('user_id') if context else None
 
@@ -84,14 +131,27 @@ class CareDeskAgent(BaseAgent):
                 "data": []
             }
 
-        sql = 
+        sql = """
+        SELECT ticket_id, issue_type, title, description, priority, status, created_at
+        FROM tickets
+        WHERE user_id = %s AND status IN ('OPEN', 'IN_PROGRESS')
+        ORDER BY priority DESC, created_at DESC
+        LIMIT 5
+        """
 
         results = self.execute_query(sql, (user_id,))
         return self.format_response(results)
 
     def _get_ticket_messages(self, ticket_id: int) -> List[Dict[str, Any]]:
+        """Get messages for a specific ticket"""
 
-        sql = 
+        sql = """
+        SELECT message_id, sender_type, sender_id, content, created_at, is_public
+        FROM ticket_messages
+        WHERE ticket_id = %s
+        ORDER BY created_at ASC
+        LIMIT 20
+        """
 
         return self.execute_query(sql, (ticket_id,))
 
@@ -100,6 +160,7 @@ class CareDeskAgent(BaseAgent):
         query: str, 
         context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
+        """Handle generic support queries"""
 
         sql = self.generate_sql(query, context)
         params = self.extract_parameters(sql, context or {})
@@ -108,8 +169,15 @@ class CareDeskAgent(BaseAgent):
         return self.format_response(results)
 
     def get_ticket_by_id(self, ticket_id: int) -> Dict[str, Any]:
+        """Get ticket details by ID"""
 
-        sql = 
+        sql = """
+        SELECT t.ticket_id, t.user_id, t.order_id, t.issue_type, t.title, 
+               t.description, t.priority, t.status, t.assigned_agent_id, 
+               t.created_at, t.resolved_at, t.resolution_notes
+        FROM tickets t
+        WHERE t.ticket_id = %s
+        """
 
         results = self.execute_query(sql, (ticket_id,))
 
@@ -120,15 +188,34 @@ class CareDeskAgent(BaseAgent):
         return self.format_response(results)
 
     def get_tickets_by_order(self, order_id: int) -> Dict[str, Any]:
+        """
+        Get tickets related to an order (used by orchestrator)
 
-        sql = 
+        Args:
+            order_id: Order ID to look up
+
+        Returns:
+            Ticket information
+        """
+        sql = """
+        SELECT ticket_id, user_id, issue_type, title, description, 
+               priority, status, assigned_agent_id, created_at, resolved_at
+        FROM tickets
+        WHERE order_id = %s
+        ORDER BY created_at DESC
+        """
 
         results = self.execute_query(sql, (order_id,))
         return self.format_response(results)
 
     def get_satisfaction_rating(self, ticket_id: int) -> Dict[str, Any]:
+        """Get satisfaction survey for a ticket"""
 
-        sql = 
+        sql = """
+        SELECT survey_id, ticket_id, rating, comments, response_date
+        FROM satisfaction_surveys
+        WHERE ticket_id = %s
+        """
 
         results = self.execute_query(sql, (ticket_id,))
         return self.format_response(results)
